@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "433420738342",
+    "project_id": "kedaireka-ugm",
+    "storage_bucket": "kedaireka-ugm.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:433420738342:android:f740cfd4a650484c9eebe7",
+        "android_client_info": {
+          "package_name": "com.example.kedaireka"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyA0waVWsi8v7GKK7311b0JScJg-wwd3nr8"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

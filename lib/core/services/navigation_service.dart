@@ -1,6 +1,7 @@
 import 'package:go_router/go_router.dart';
 import '../../features/splash/splash_screen.dart';
 import '../../features/auth/login_screen.dart';
+import '../../features/auth/register_screen.dart';
 import '../../features/home/home_screen.dart';
 import '../../features/maps/maps_screen.dart';
 import '../../features/ar/ar_screen.dart';
@@ -23,6 +24,11 @@ class NavigationService {
         path: AppConstants.authRoute,
         name: 'auth',
         builder: (context, state) => const LoginScreen(),
+      ),
+      GoRoute(
+        path: '/register',
+        name: 'register',
+        builder: (context, state) => const RegisterScreen(),
       ),
       GoRoute(
         path: AppConstants.homeRoute,
