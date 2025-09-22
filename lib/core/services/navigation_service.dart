@@ -6,6 +6,8 @@ import '../../features/maps/maps_screen.dart';
 import '../../features/ar/ar_screen.dart';
 import '../../features/videocall/videocall_screen.dart';
 import '../../features/projects/projects_screen.dart';
+import '../../features/projects/project_detail_screen.dart';
+import '../../shared/widgets/main_layout.dart';
 import '../constants/app_constants.dart';
 
 class NavigationService {
@@ -25,27 +27,50 @@ class NavigationService {
       GoRoute(
         path: AppConstants.homeRoute,
         name: 'home',
-        builder: (context, state) => const HomeScreen(),
+        builder: (context, state) => MainLayout(
+          currentRoute: AppConstants.homeRoute,
+          child: const HomeScreen(),
+        ),
       ),
       GoRoute(
         path: AppConstants.mapsRoute,
         name: 'maps',
-        builder: (context, state) => const MapsScreen(),
+        builder: (context, state) => MainLayout(
+          currentRoute: AppConstants.mapsRoute,
+          child: const MapsScreen(),
+        ),
       ),
       GoRoute(
         path: AppConstants.arRoute,
         name: 'ar',
-        builder: (context, state) => const ARScreen(),
+        builder: (context, state) => MainLayout(
+          currentRoute: AppConstants.arRoute,
+          child: const ARScreen(),
+        ),
       ),
       GoRoute(
         path: AppConstants.videocallRoute,
         name: 'videocall',
-        builder: (context, state) => const VideocallScreen(),
+        builder: (context, state) => MainLayout(
+          currentRoute: AppConstants.videocallRoute,
+          child: const VideocallScreen(),
+        ),
       ),
       GoRoute(
         path: AppConstants.projectsRoute,
         name: 'projects',
-        builder: (context, state) => const ProjectsScreen(),
+        builder: (context, state) => MainLayout(
+          currentRoute: AppConstants.projectsRoute,
+          child: const ProjectsScreen(),
+        ),
+      ),
+      GoRoute(
+        path: '/project/:id',
+        name: 'project_detail',
+        builder: (context, state) {
+          final projectId = state.pathParameters['id'] ?? '';
+          return ProjectDetailScreen(projectId: projectId);
+        },
       ),
     ],
   );

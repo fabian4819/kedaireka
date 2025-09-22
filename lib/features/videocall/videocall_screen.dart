@@ -9,6 +9,7 @@ class VideocallScreen extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Video Call'),
+        automaticallyImplyLeading: false, // No back button, use bottom nav
       ),
       body: const Center(
         child: Column(

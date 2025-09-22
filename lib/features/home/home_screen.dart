@@ -19,6 +19,7 @@ class HomeScreen extends StatelessWidget {
             },
           ),
         ],
+        automaticallyImplyLeading: false, // Remove back button on home
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
@@ -119,16 +120,23 @@ class HomeScreen extends StatelessWidget {
             ),
             const SizedBox(height: 16),
 
-            // Placeholder for recent projects
+            // Recent projects list
             Card(
               child: ListTile(
                 leading: const Icon(Icons.architecture, color: AppTheme.primaryColor),
                 title: const Text('Sample Project'),
                 subtitle: const Text('Land measurement - Area: 1.2 hectares'),
                 trailing: const Icon(Icons.arrow_forward_ios),
-                onTap: () {
-                  // TODO: Navigate to project details
-                },
+                onTap: () => context.go('/project/1'),
+              ),
+            ),
+            Card(
+              child: ListTile(
+                leading: const Icon(Icons.business, color: AppTheme.accentColor),
+                title: const Text('Building Survey'),
+                subtitle: const Text('Commercial building perimeter'),
+                trailing: const Icon(Icons.arrow_forward_ios),
+                onTap: () => context.go('/project/2'),
               ),
             ),
           ],

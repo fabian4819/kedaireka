@@ -9,6 +9,7 @@ class ARScreen extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(
         title: const Text('AR Mapping'),
+        automaticallyImplyLeading: false, // No back button, use bottom nav
       ),
       body: const Center(
         child: Column(
