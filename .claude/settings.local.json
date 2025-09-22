@@ -5,7 +5,12 @@
       "Bash(flutter analyze:*)",
       "Bash(flutter build:*)",
       "Bash(flutter:*)",
-      "Bash(find:*)"
+      "Bash(find:*)",
+      "Bash(keytool:*)",
+      "Bash(where keytool)",
+      "Bash(dir:*)",
+      "Bash(findstr:*)",
+      "Bash(\"C:\\Program Files\\Android\\Android Studio\\jbr\\bin\\keytool.exe\" -list -v -keystore \"%USERPROFILE%\\.android\\debug.keystore\" -alias androiddebugkey -storepass android -keypass android)"
     ],
     "deny": [],
     "ask": []

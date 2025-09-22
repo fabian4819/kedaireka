@@ -1,6 +1,8 @@
+import 'dart:async';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 
 class AuthService {
   static final AuthService _instance = AuthService._internal();
@@ -10,6 +12,7 @@ class AuthService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final GoogleSignIn _googleSignIn = GoogleSignIn(
     scopes: ['email', 'profile'],
+    signInOption: SignInOption.standard,
   );
 
   User? get currentUser => _auth.currentUser;
@@ -45,18 +48,36 @@ class AuthService {
         throw 'Google Sign-In is not fully supported on this platform. Please use email/password authentication.';
       }
 
-      final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
+      // Check internet connectivity first
+      try {
+        await _googleSignIn.signOut();
+      } catch (e) {
+        // Ignore signOut errors, might not be signed in
+      }
+
+      // Attempt Google Sign-In with timeout
+      final GoogleSignInAccount? googleUser = await _googleSignIn.signIn().timeout(
+        const Duration(seconds: 30),
+        onTimeout: () {
+          throw TimeoutException('Google Sign-In timed out. Please check your internet connection.', const Duration(seconds: 30));
+        },
+      );
 
       if (googleUser == null) {
         // User cancelled the sign-in
         return null;
       }
 
-      final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
+      final GoogleSignInAuthentication googleAuth = await googleUser.authentication.timeout(
+        const Duration(seconds: 15),
+        onTimeout: () {
+          throw TimeoutException('Failed to get authentication tokens. Please check your internet connection.', const Duration(seconds: 15));
+        },
+      );
 
       // Ensure we have valid tokens
       if (googleAuth.accessToken == null || googleAuth.idToken == null) {
-        throw 'Failed to get authentication tokens from Google';
+        throw 'Failed to get authentication tokens from Google. Please try again.';
       }
 
       final credential = GoogleAuthProvider.credential(
@@ -64,10 +85,34 @@ class AuthService {
         idToken: googleAuth.idToken,
       );
 
-      return await _auth.signInWithCredential(credential);
+      return await _auth.signInWithCredential(credential).timeout(
+        const Duration(seconds: 15),
+        onTimeout: () {
+          throw TimeoutException('Firebase authentication timed out. Please check your internet connection.', const Duration(seconds: 15));
+        },
+      );
+    } on TimeoutException catch (e) {
+      throw e.message ?? 'Connection timeout. Please check your internet connection and try again.';
     } on FirebaseAuthException catch (e) {
       throw _handleFirebaseAuthException(e);
+    } on PlatformException catch (e) {
+      // Handle specific platform exceptions
+      switch (e.code) {
+        case 'sign_in_failed':
+          throw 'Google Sign-In failed. Please check your internet connection and try again.';
+        case 'network_error':
+          throw 'Network error. Please check your internet connection and try again.';
+        case 'sign_in_canceled':
+          return null; // User cancelled
+        case 'sign_in_required':
+          throw 'Sign-in required. Please try again.';
+        default:
+          throw 'Google Sign-In error: ${e.message ?? e.code}';
+      }
     } catch (e) {
+      if (e.toString().contains('network') || e.toString().contains('connection')) {
+        throw 'Network connection error. Please check your internet connection and try again.';
+      }
       throw 'An error occurred during Google sign in: $e';
     }
   }
