@@ -20,6 +20,7 @@ class AgoraService {
   int? get remoteUid => _remoteUid;
   bool get muted => _muted;
   bool get isScreenSharing => _isScreenSharing;
+  bool get isCallActive => _localUserJoined;
 
   // Callbacks
   Function(int uid, int elapsed)? onUserJoined;

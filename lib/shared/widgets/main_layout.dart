@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/constants/app_constants.dart';
 import '../../core/theme/app_theme.dart';
+import 'screen_share_indicator.dart';
 
 class MainLayout extends StatelessWidget {
   final Widget child;
@@ -16,7 +17,17 @@ class MainLayout extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: child,
+      body: Stack(
+        children: [
+          child,
+          // Show screen sharing indicator on top of content
+          Positioned(
+            top: MediaQuery.of(context).padding.top + 8,
+            right: 8,
+            child: const ScreenShareIndicator(),
+          ),
+        ],
+      ),
       bottomNavigationBar: _shouldShowBottomNav(currentRoute)
           ? BottomNavigationBar(
               type: BottomNavigationBarType.fixed,
@@ -38,8 +49,8 @@ class MainLayout extends StatelessWidget {
                   label: 'AR',
                 ),
                 BottomNavigationBarItem(
-                  icon: Icon(Icons.video_call),
-                  label: 'Video',
+                  icon: Icon(Icons.screen_share),
+                  label: 'Share',
                 ),
                 BottomNavigationBarItem(
                   icon: Icon(Icons.folder),

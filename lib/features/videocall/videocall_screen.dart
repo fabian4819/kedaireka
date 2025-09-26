@@ -19,6 +19,19 @@ class _VideocallScreenState extends State<VideocallScreen> {
   void initState() {
     super.initState();
     _setupAgoraCallbacks();
+    _checkExistingSession();
+  }
+
+  void _checkExistingSession() {
+    // Check if there's already an active session when returning to this screen
+    if (_agoraService.localUserJoined) {
+      setState(() {
+        _isCallStarted = true;
+        _statusMessage = _agoraService.isScreenSharing
+            ? 'Screen sharing active'
+            : 'Session active';
+      });
+    }
   }
 
   void _setupAgoraCallbacks() {
@@ -449,13 +462,8 @@ class _VideocallScreenState extends State<VideocallScreen> {
 
   @override
   void dispose() {
-    // Ensure cleanup when screen is disposed (e.g., user navigates away)
-    if (_isCallStarted) {
-      _agoraService.endCallCompletely().catchError((error) {
-        // Log error during disposal cleanup
-        debugPrint('Error during disposal cleanup: $error');
-      });
-    }
+    // Don't cleanup when disposing - allow call to continue in background
+    // Users must explicitly tap "End Call" to terminate the session
     super.dispose();
   }
 }
