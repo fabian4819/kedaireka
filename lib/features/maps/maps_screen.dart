@@ -16,7 +16,7 @@ class _MapsScreenState extends State<MapsScreen> {
 
   // Default location (Universitas Gadjah Mada, Yogyakarta)
   static const CameraPosition _initialPosition = CameraPosition(
-    target: LatLng(-7.771492, 110.378307),
+    target: LatLng(-7.771043857941956, 110.37910160750407),
     zoom: 18.0,
   );
 

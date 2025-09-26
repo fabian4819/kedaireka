@@ -13,13 +13,13 @@ class AgoraService {
   bool _localUserJoined = false;
   int? _remoteUid;
   bool _muted = false;
-  bool _cameraOff = false;
+  bool _isScreenSharing = false;
 
   RtcEngine? get engine => _engine;
   bool get localUserJoined => _localUserJoined;
   int? get remoteUid => _remoteUid;
   bool get muted => _muted;
-  bool get cameraOff => _cameraOff;
+  bool get isScreenSharing => _isScreenSharing;
 
   // Callbacks
   Function(int uid, int elapsed)? onUserJoined;
@@ -66,9 +66,8 @@ class AgoraService {
         ),
       );
 
-      // Enable video
-      await _engine!.enableVideo();
-      await _engine!.startPreview();
+      // Enable audio only (no video)
+      await _engine!.enableAudio();
     } catch (e) {
       log('Error initializing Agora: $e');
       rethrow;
@@ -76,7 +75,7 @@ class AgoraService {
   }
 
   Future<void> _requestPermissions() async {
-    await [Permission.microphone, Permission.camera].request();
+    await [Permission.microphone].request();
   }
 
   Future<void> joinChannel({String? token, String? channelName, int? uid}) async {
@@ -106,9 +105,24 @@ class AgoraService {
     if (_engine == null) return;
 
     try {
+      // Stop screen sharing if active
+      if (_isScreenSharing) {
+        await stopScreenSharing();
+      }
+
+      // Disable audio
+      await _engine!.disableAudio();
+
+      // Leave the channel
       await _engine!.leaveChannel();
+
+      // Reset all state
       _localUserJoined = false;
       _remoteUid = null;
+      _muted = false;
+      _isScreenSharing = false;
+
+      log('Successfully left channel and cleaned up');
     } catch (e) {
       log('Error leaving channel: $e');
     }
@@ -125,35 +139,100 @@ class AgoraService {
     }
   }
 
-  Future<void> toggleCamera() async {
+  Future<void> startScreenSharing() async {
     if (_engine == null) return;
 
     try {
-      _cameraOff = !_cameraOff;
-      await _engine!.muteLocalVideoStream(_cameraOff);
+      // For Android, we need to start screen capture
+      await _engine!.startScreenCapture(
+        const ScreenCaptureParameters2(
+          captureAudio: true,
+          captureVideo: true,
+          videoParams: ScreenVideoParameters(
+            dimensions: VideoDimensions(width: 1280, height: 720),
+            frameRate: 15,
+            bitrate: 1000,
+          ),
+          audioParams: ScreenAudioParameters(
+            sampleRate: 48000,
+            channels: 2,
+            captureSignalVolume: 100,
+          ),
+        ),
+      );
+
+      _isScreenSharing = true;
+      log('Screen sharing started');
     } catch (e) {
-      log('Error toggling camera: $e');
+      log('Error starting screen sharing: $e');
+      rethrow;
     }
   }
 
-  Future<void> switchCamera() async {
+  Future<void> stopScreenSharing() async {
     if (_engine == null) return;
 
     try {
-      await _engine!.switchCamera();
+      await _engine!.stopScreenCapture();
+      _isScreenSharing = false;
+      log('Screen sharing stopped');
     } catch (e) {
-      log('Error switching camera: $e');
+      log('Error stopping screen sharing: $e');
     }
   }
 
   Future<void> dispose() async {
     try {
+      // Ensure we leave channel first
       await leaveChannel();
+
+      // Event handlers will be cleaned up when the engine is released
+
+      // Release the engine
       await _engine?.release();
+
+      // Clear all references
       _engine = null;
-      _instance = null;
+      _localUserJoined = false;
+      _remoteUid = null;
+      _muted = false;
+      _isScreenSharing = false;
+
+      // Clear callbacks
+      onUserJoined = null;
+      onUserOffline = null;
+      onJoinChannelSuccess = null;
+      onLeaveChannel = null;
+
+      log('Agora service completely disposed');
     } catch (e) {
       log('Error disposing Agora service: $e');
+    }
+  }
+
+  Future<void> endCallCompletely() async {
+    try {
+      log('Ending call completely...');
+
+      // Stop screen sharing if active
+      if (_isScreenSharing) {
+        await stopScreenSharing();
+      }
+
+      // Disable all streams
+      await _engine?.disableAudio();
+      await _engine?.muteLocalAudioStream(true);
+
+      // Leave channel and cleanup
+      await leaveChannel();
+
+      // Release the engine but keep singleton intact
+      await _engine?.release();
+      _engine = null;
+
+      log('Call ended completely');
+    } catch (e) {
+      log('Error ending call completely: $e');
     }
   }
 }

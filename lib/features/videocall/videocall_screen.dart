@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:agora_rtc_engine/agora_rtc_engine.dart';
 import '../../core/services/agora_service.dart';
 import '../../core/theme/app_theme.dart';
 
@@ -72,11 +71,24 @@ class _VideocallScreenState extends State<VideocallScreen> {
   }
 
   Future<void> _endCall() async {
-    await _agoraService.leaveChannel();
     setState(() {
-      _isCallStarted = false;
-      _statusMessage = 'Call ended';
+      _statusMessage = 'Ending session...';
     });
+
+    try {
+      // Use the complete end call method to ensure full cleanup
+      await _agoraService.endCallCompletely();
+
+      setState(() {
+        _isCallStarted = false;
+        _statusMessage = 'Session ended';
+      });
+    } catch (e) {
+      setState(() {
+        _statusMessage = 'Error ending session: $e';
+        _isCallStarted = false;
+      });
+    }
   }
 
   void _showErrorDialog(String message) {
@@ -115,7 +127,7 @@ class _VideocallScreenState extends State<VideocallScreen> {
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
           colors: [
-            AppTheme.primaryColor.withOpacity(0.1),
+            AppTheme.primaryColor.withValues(alpha: 0.1),
             Colors.white,
           ],
         ),
@@ -129,18 +141,18 @@ class _VideocallScreenState extends State<VideocallScreen> {
               Container(
                 padding: const EdgeInsets.all(24),
                 decoration: BoxDecoration(
-                  color: AppTheme.primaryColor.withOpacity(0.1),
+                  color: AppTheme.primaryColor.withValues(alpha: 0.1),
                   shape: BoxShape.circle,
                 ),
                 child: Icon(
-                  Icons.video_call,
+                  Icons.screen_share,
                   size: 80,
                   color: AppTheme.primaryColor,
                 ),
               ),
               const SizedBox(height: 32),
               const Text(
-                'KEDAIREKA Video Call',
+                'KEDAIREKA Screen Share',
                 style: TextStyle(
                   fontSize: 28,
                   fontWeight: FontWeight.bold,
@@ -174,10 +186,10 @@ class _VideocallScreenState extends State<VideocallScreen> {
                       : const Row(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            Icon(Icons.videocam),
+                            Icon(Icons.screen_share),
                             SizedBox(width: 12),
                             Text(
-                              'Start Video Call',
+                              'Start Screen Share',
                               style: TextStyle(
                                 fontSize: 18,
                                 fontWeight: FontWeight.w600,
@@ -191,7 +203,7 @@ class _VideocallScreenState extends State<VideocallScreen> {
               Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: Colors.blue.withOpacity(0.1),
+                  color: Colors.blue.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Column(
@@ -207,11 +219,11 @@ class _VideocallScreenState extends State<VideocallScreen> {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      'Share this channel name with others to join the same call',
+                      'Share this channel name with others to join the same session',
                       textAlign: TextAlign.center,
                       style: TextStyle(
                         fontSize: 12,
-                        color: Colors.blue.withOpacity(0.8),
+                        color: Colors.blue.withValues(alpha: 0.8),
                       ),
                     ),
                   ],
@@ -225,127 +237,185 @@ class _VideocallScreenState extends State<VideocallScreen> {
   }
 
   Widget _buildCallInterface() {
-    return Stack(
-      children: [
-        // Local video view (full screen)
-        Container(
-          color: Colors.black,
-          child: _agoraService.engine != null
-              ? AgoraVideoView(
-                  controller: VideoViewController(
-                    rtcEngine: _agoraService.engine!,
-                    canvas: const VideoCanvas(uid: 0),
-                  ),
-                )
-              : const Center(
-                  child: CircularProgressIndicator(color: Colors.white),
-                ),
+    return Container(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [
+            AppTheme.primaryColor.withValues(alpha: 0.1),
+            Colors.white,
+          ],
         ),
-
-        // Remote video view (top right corner)
-        if (_agoraService.remoteUid != null)
-          Positioned(
-            top: 50,
-            right: 20,
-            child: Container(
-              width: 120,
-              height: 160,
-              decoration: BoxDecoration(
-                border: Border.all(color: Colors.white, width: 2),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(10),
-                child: AgoraVideoView(
-                  controller: VideoViewController.remote(
-                    rtcEngine: _agoraService.engine!,
-                    canvas: VideoCanvas(uid: _agoraService.remoteUid),
-                    connection: const RtcConnection(channelId: 'testing'),
-                  ),
-                ),
-              ),
-            ),
-          ),
-
-        // Status indicator
-        Positioned(
-          top: 50,
-          left: 20,
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-            decoration: BoxDecoration(
-              color: Colors.black54,
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
+      ),
+      child: Column(
+        children: [
+          // Header with status
+          Container(
+            padding: const EdgeInsets.all(20),
+            child: Column(
               children: [
+                const SizedBox(height: 20),
                 Container(
-                  width: 8,
-                  height: 8,
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                   decoration: BoxDecoration(
                     color: _agoraService.localUserJoined ? Colors.green : Colors.red,
-                    shape: BoxShape.circle,
+                    borderRadius: BorderRadius.circular(20),
                   ),
-                ),
-                const SizedBox(width: 6),
-                Text(
-                  _statusMessage,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 12,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        width: 8,
+                        height: 8,
+                        decoration: const BoxDecoration(
+                          color: Colors.white,
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        _statusMessage,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ],
             ),
           ),
-        ),
 
-        // Control buttons
-        Positioned(
-          bottom: 100,
-          left: 0,
-          right: 0,
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-            children: [
-              // Toggle microphone
-              _buildControlButton(
-                icon: _agoraService.muted ? Icons.mic_off : Icons.mic,
-                color: _agoraService.muted ? Colors.red : Colors.white,
-                onPressed: () async {
-                  await _agoraService.toggleMute();
-                  setState(() {});
-                },
-              ),
-              // End call
-              _buildControlButton(
-                icon: Icons.call_end,
-                color: Colors.red,
-                backgroundColor: Colors.red,
-                onPressed: _endCall,
-              ),
-              // Toggle camera
-              _buildControlButton(
-                icon: _agoraService.cameraOff ? Icons.videocam_off : Icons.videocam,
-                color: _agoraService.cameraOff ? Colors.red : Colors.white,
-                onPressed: () async {
-                  await _agoraService.toggleCamera();
-                  setState(() {});
-                },
-              ),
-              // Switch camera
-              _buildControlButton(
-                icon: Icons.switch_camera,
-                color: Colors.white,
-                onPressed: () async {
-                  await _agoraService.switchCamera();
-                },
-              ),
-            ],
+          // Main content area
+          Expanded(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                // Screen sharing indicator
+                Container(
+                  padding: const EdgeInsets.all(32),
+                  decoration: BoxDecoration(
+                    color: _agoraService.isScreenSharing
+                        ? Colors.green.withValues(alpha: 0.1)
+                        : Colors.grey.withValues(alpha: 0.1),
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: _agoraService.isScreenSharing ? Colors.green : Colors.grey,
+                      width: 3,
+                    ),
+                  ),
+                  child: Icon(
+                    _agoraService.isScreenSharing ? Icons.screen_share : Icons.stop_screen_share,
+                    size: 80,
+                    color: _agoraService.isScreenSharing ? Colors.green : Colors.grey,
+                  ),
+                ),
+                const SizedBox(height: 24),
+                Text(
+                  _agoraService.isScreenSharing
+                      ? 'Screen Sharing Active'
+                      : 'Screen Sharing Stopped',
+                  style: TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
+                    color: _agoraService.isScreenSharing ? Colors.green : Colors.grey,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  _agoraService.isScreenSharing
+                      ? 'Your screen is being shared with other participants'
+                      : 'Tap the screen share button to start sharing',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    fontSize: 16,
+                    color: Colors.grey,
+                  ),
+                ),
+
+                // Remote user indicator
+                if (_agoraService.remoteUid != null) ...[
+                  const SizedBox(height: 32),
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Colors.blue.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.person, color: Colors.blue, size: 20),
+                        const SizedBox(width: 8),
+                        Text(
+                          'User ${_agoraService.remoteUid} joined',
+                          style: const TextStyle(
+                            color: Colors.blue,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ],
+            ),
           ),
-        ),
-      ],
+
+          // Control buttons at bottom
+          Container(
+            padding: const EdgeInsets.all(20),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: [
+                // Toggle microphone
+                _buildControlButton(
+                  icon: _agoraService.muted ? Icons.mic_off : Icons.mic,
+                  color: _agoraService.muted ? Colors.red : AppTheme.primaryColor,
+                  backgroundColor: _agoraService.muted
+                      ? Colors.red.withValues(alpha: 0.1)
+                      : AppTheme.primaryColor.withValues(alpha: 0.1),
+                  onPressed: () async {
+                    await _agoraService.toggleMute();
+                    setState(() {});
+                  },
+                ),
+
+                // Screen share toggle
+                _buildControlButton(
+                  icon: _agoraService.isScreenSharing ? Icons.stop_screen_share : Icons.screen_share,
+                  color: _agoraService.isScreenSharing ? Colors.orange : AppTheme.primaryColor,
+                  backgroundColor: _agoraService.isScreenSharing
+                      ? Colors.orange.withValues(alpha: 0.1)
+                      : AppTheme.primaryColor.withValues(alpha: 0.1),
+                  onPressed: () async {
+                    if (_agoraService.isScreenSharing) {
+                      await _agoraService.stopScreenSharing();
+                    } else {
+                      try {
+                        await _agoraService.startScreenSharing();
+                      } catch (e) {
+                        _showErrorDialog('Failed to start screen sharing: $e');
+                      }
+                    }
+                    setState(() {});
+                  },
+                ),
+
+                // End session
+                _buildControlButton(
+                  icon: Icons.call_end,
+                  color: Colors.white,
+                  backgroundColor: Colors.red,
+                  onPressed: _endCall,
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -358,16 +428,20 @@ class _VideocallScreenState extends State<VideocallScreen> {
     return GestureDetector(
       onTap: onPressed,
       child: Container(
-        width: 60,
-        height: 60,
+        width: 70,
+        height: 70,
         decoration: BoxDecoration(
-          color: backgroundColor ?? Colors.black54,
+          color: backgroundColor ?? AppTheme.primaryColor.withValues(alpha: 0.1),
           shape: BoxShape.circle,
+          border: Border.all(
+            color: color.withValues(alpha: 0.3),
+            width: 2,
+          ),
         ),
         child: Icon(
           icon,
           color: color,
-          size: 28,
+          size: 32,
         ),
       ),
     );
@@ -375,6 +449,13 @@ class _VideocallScreenState extends State<VideocallScreen> {
 
   @override
   void dispose() {
+    // Ensure cleanup when screen is disposed (e.g., user navigates away)
+    if (_isCallStarted) {
+      _agoraService.endCallCompletely().catchError((error) {
+        // Log error during disposal cleanup
+        debugPrint('Error during disposal cleanup: $error');
+      });
+    }
     super.dispose();
   }
 }

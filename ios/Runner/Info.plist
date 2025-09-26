@@ -46,10 +46,8 @@
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
 
-	<!-- Permissions for Agora video calling -->
-	<key>NSCameraUsageDescription</key>
-	<string>This app needs access to camera for video calling functionality</string>
+	<!-- Permissions for Agora screen sharing -->
 	<key>NSMicrophoneUsageDescription</key>
-	<string>This app needs access to microphone for video calling functionality</string>
+	<string>This app needs access to microphone for screen sharing and voice communication</string>
 </dict>
 </plist>
