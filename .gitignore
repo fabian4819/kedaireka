@@ -50,3 +50,6 @@ debug.keystore
 
 # Remove firebase_options.dart from gitignore as it's needed for the app
 # firebase_options.dart
+
+# Agora configuration (contains sensitive credentials)
+lib/core/config/agora_config.dart

@@ -14,10 +14,10 @@ class MapsScreen extends StatefulWidget {
 class _MapsScreenState extends State<MapsScreen> {
   final Completer<GoogleMapController> _controller = Completer<GoogleMapController>();
 
-  // Default location (Yogyakarta, Indonesia - UGM area)
+  // Default location (Universitas Gadjah Mada, Yogyakarta)
   static const CameraPosition _initialPosition = CameraPosition(
     target: LatLng(-7.771492, 110.378307),
-    zoom: 16.0,
+    zoom: 18.0,
   );
 
   Position? _currentPosition;
@@ -160,39 +160,6 @@ class _MapsScreenState extends State<MapsScreen> {
           ),
         ],
       ),
-      body: const Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              Icons.map,
-              size: 80,
-              color: AppTheme.primaryColor,
-            ),
-            SizedBox(height: 16),
-            Text(
-              'Google Maps',
-              style: TextStyle(
-                fontSize: 24,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            SizedBox(height: 8),
-            Text(
-              'Please add your Google Maps API key to AndroidManifest.xml',
-              textAlign: TextAlign.center,
-              style: TextStyle(color: Colors.orange),
-            ),
-            SizedBox(height: 16),
-            Text(
-              'Replace YOUR_GOOGLE_MAPS_API_KEY with your actual API key',
-              textAlign: TextAlign.center,
-              style: TextStyle(color: Colors.grey, fontSize: 12),
-            ),
-          ],
-        ),
-      ),
-      /*
       body: _isLoading
           ? const Center(
               child: Column(
@@ -268,7 +235,6 @@ class _MapsScreenState extends State<MapsScreen> {
                 ),
               ],
             ),
-      */
     );
   }
 }
