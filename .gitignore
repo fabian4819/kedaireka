@@ -53,3 +53,13 @@ debug.keystore
 
 # Agora configuration (contains sensitive credentials)
 lib/core/config/agora_config.dart
+
+# Python files
+*.pyc
+__pycache__/
+*.py[cod]
+*$py.class
+nul
+
+# Icon generation script (helper only)
+generate_icon.py

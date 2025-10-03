@@ -23,7 +23,7 @@
     <uses-feature android:name="android.hardware.microphone" />
 
     <application
-        android:label="kedaireka"
+        android:label="KEDAIREKA"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity
