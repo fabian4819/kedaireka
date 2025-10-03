@@ -1,6 +1,6 @@
-import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:latlong2/latlong.dart';
 import 'package:geolocator/geolocator.dart';
 import '../../core/theme/app_theme.dart';
 
@@ -12,19 +12,17 @@ class MapsScreen extends StatefulWidget {
 }
 
 class _MapsScreenState extends State<MapsScreen> {
-  final Completer<GoogleMapController> _controller = Completer<GoogleMapController>();
+  final MapController _mapController = MapController();
 
   // Default location (Universitas Gadjah Mada, Yogyakarta)
-  static const CameraPosition _initialPosition = CameraPosition(
-    target: LatLng(-7.771043857941956, 110.37910160750407),
-    zoom: 18.0,
-  );
+  static const LatLng _initialPosition = LatLng(-7.771043857941956, 110.37910160750407);
+  static const double _initialZoom = 18.0;
 
   Position? _currentPosition;
-  Set<Marker> _markers = {};
-  Set<Polygon> _polygons = {};
+  List<Marker> _markers = [];
+  List<Polygon> _polygons = [];
   bool _isLoading = true;
-  MapType _mapType = MapType.hybrid; // Good for geodetic work
+  bool _isSatelliteView = false; // Toggle between street and satellite view
 
   @override
   void initState() {
@@ -62,26 +60,30 @@ class _MapsScreenState extends State<MapsScreen> {
         _currentPosition = position;
         _markers.add(
           Marker(
-            markerId: const MarkerId('current_location'),
-            position: LatLng(position.latitude, position.longitude),
-            infoWindow: const InfoWindow(
-              title: 'Current Location',
-              snippet: 'You are here',
+            point: LatLng(position.latitude, position.longitude),
+            width: 80,
+            height: 80,
+            child: const Column(
+              children: [
+                Icon(Icons.location_on, color: Colors.blue, size: 40),
+                Text(
+                  'You are here',
+                  style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                    backgroundColor: Colors.white,
+                  ),
+                ),
+              ],
             ),
-            icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueBlue),
           ),
         );
         _isLoading = false;
       });
 
-      final GoogleMapController controller = await _controller.future;
-      controller.animateCamera(
-        CameraUpdate.newCameraPosition(
-          CameraPosition(
-            target: LatLng(position.latitude, position.longitude),
-            zoom: 18.0,
-          ),
-        ),
+      _mapController.move(
+        LatLng(position.latitude, position.longitude),
+        18.0,
       );
     } catch (e) {
       _showLocationError('Error getting location: $e');
@@ -95,17 +97,29 @@ class _MapsScreenState extends State<MapsScreen> {
     );
   }
 
-  void _onMapTapped(LatLng point) {
+  void _onMapTapped(TapPosition tapPosition, LatLng point) {
     setState(() {
       _markers.add(
         Marker(
-          markerId: MarkerId(point.toString()),
-          position: point,
-          infoWindow: InfoWindow(
-            title: 'Survey Point',
-            snippet: 'Lat: ${point.latitude.toStringAsFixed(6)}, Lng: ${point.longitude.toStringAsFixed(6)}',
+          point: point,
+          width: 80,
+          height: 80,
+          child: Column(
+            children: [
+              const Icon(Icons.location_on, color: Colors.red, size: 40),
+              Container(
+                padding: const EdgeInsets.all(2),
+                decoration: const BoxDecoration(
+                  color: Colors.white,
+                ),
+                child: Text(
+                  'Lat: ${point.latitude.toStringAsFixed(6)}\nLng: ${point.longitude.toStringAsFixed(6)}',
+                  style: const TextStyle(fontSize: 8),
+                  textAlign: TextAlign.center,
+                ),
+              ),
+            ],
           ),
-          icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
         ),
       );
     });
@@ -113,7 +127,7 @@ class _MapsScreenState extends State<MapsScreen> {
 
   void _toggleMapType() {
     setState(() {
-      _mapType = _mapType == MapType.hybrid ? MapType.normal : MapType.hybrid;
+      _isSatelliteView = !_isSatelliteView;
     });
   }
 
@@ -123,13 +137,22 @@ class _MapsScreenState extends State<MapsScreen> {
       if (_currentPosition != null) {
         _markers.add(
           Marker(
-            markerId: const MarkerId('current_location'),
-            position: LatLng(_currentPosition!.latitude, _currentPosition!.longitude),
-            infoWindow: const InfoWindow(
-              title: 'Current Location',
-              snippet: 'You are here',
+            point: LatLng(_currentPosition!.latitude, _currentPosition!.longitude),
+            width: 80,
+            height: 80,
+            child: const Column(
+              children: [
+                Icon(Icons.location_on, color: Colors.blue, size: 40),
+                Text(
+                  'You are here',
+                  style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                    backgroundColor: Colors.white,
+                  ),
+                ),
+              ],
             ),
-            icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueBlue),
           ),
         );
       }
@@ -144,7 +167,7 @@ class _MapsScreenState extends State<MapsScreen> {
         automaticallyImplyLeading: false,
         actions: [
           IconButton(
-            icon: Icon(_mapType == MapType.hybrid ? Icons.map : Icons.satellite),
+            icon: Icon(_isSatelliteView ? Icons.map : Icons.satellite),
             onPressed: _toggleMapType,
             tooltip: 'Toggle Map Type',
           ),
@@ -173,19 +196,23 @@ class _MapsScreenState extends State<MapsScreen> {
             )
           : Stack(
               children: [
-                GoogleMap(
-                  mapType: _mapType,
-                  initialCameraPosition: _initialPosition,
-                  onMapCreated: (GoogleMapController controller) {
-                    _controller.complete(controller);
-                  },
-                  markers: _markers,
-                  polygons: _polygons,
-                  onTap: _onMapTapped,
-                  myLocationEnabled: true,
-                  myLocationButtonEnabled: false,
-                  compassEnabled: true,
-                  mapToolbarEnabled: false,
+                FlutterMap(
+                  mapController: _mapController,
+                  options: MapOptions(
+                    initialCenter: _initialPosition,
+                    initialZoom: _initialZoom,
+                    onTap: _onMapTapped,
+                  ),
+                  children: [
+                    TileLayer(
+                      urlTemplate: _isSatelliteView
+                          ? 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'
+                          : 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                      userAgentPackageName: 'com.kedaireka.app',
+                    ),
+                    MarkerLayer(markers: _markers),
+                    PolygonLayer(polygons: _polygons),
+                  ],
                 ),
                 Positioned(
                   bottom: 16,

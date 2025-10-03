@@ -14,6 +14,10 @@ class AgoraService {
   int? _remoteUid;
   bool _muted = false;
   bool _isScreenSharing = false;
+  bool _videoEnabled = false;
+  bool _cameraEnabled = false;
+  String? _currentChannelName;
+  String? _currentToken;
 
   RtcEngine? get engine => _engine;
   bool get localUserJoined => _localUserJoined;
@@ -21,12 +25,17 @@ class AgoraService {
   bool get muted => _muted;
   bool get isScreenSharing => _isScreenSharing;
   bool get isCallActive => _localUserJoined;
+  bool get videoEnabled => _videoEnabled;
+  bool get cameraEnabled => _cameraEnabled;
+  String? get currentChannelName => _currentChannelName;
+  String? get currentToken => _currentToken;
 
   // Callbacks
   Function(int uid, int elapsed)? onUserJoined;
   Function(int uid, UserOfflineReasonType reason)? onUserOffline;
   Function(RtcConnection connection, int uid)? onJoinChannelSuccess;
   Function(RtcConnection connection, RtcStats stats)? onLeaveChannel;
+  Function()? onRemoteVideoStateChanged;
 
   Future<void> initialize() async {
     try {
@@ -67,8 +76,9 @@ class AgoraService {
         ),
       );
 
-      // Enable audio only (no video)
+      // Enable audio and video
       await _engine!.enableAudio();
+      await _engine!.enableVideo();
     } catch (e) {
       log('Error initializing Agora: $e');
       rethrow;
@@ -76,26 +86,36 @@ class AgoraService {
   }
 
   Future<void> _requestPermissions() async {
-    await [Permission.microphone].request();
+    await [Permission.microphone, Permission.camera].request();
   }
 
-  Future<void> joinChannel({String? token, String? channelName, int? uid}) async {
+  Future<void> joinChannel({String? token, String? channelName, int? uid, bool enableVideo = true}) async {
     if (_engine == null) {
       throw Exception('Agora engine not initialized');
     }
 
     try {
-      ChannelMediaOptions options = const ChannelMediaOptions(
+      _currentChannelName = channelName ?? AgoraConfig.channelName;
+      _currentToken = token ?? AgoraConfig.tempToken;
+
+      ChannelMediaOptions options = ChannelMediaOptions(
         clientRoleType: ClientRoleType.clientRoleBroadcaster,
         channelProfile: ChannelProfileType.channelProfileCommunication,
+        publishCameraTrack: enableVideo,
+        publishMicrophoneTrack: true,
+        autoSubscribeVideo: true,
+        autoSubscribeAudio: true,
       );
 
       await _engine!.joinChannel(
-        token: token ?? AgoraConfig.tempToken,
-        channelId: channelName ?? AgoraConfig.channelName,
+        token: _currentToken!,
+        channelId: _currentChannelName!,
         uid: uid ?? 0,
         options: options,
       );
+
+      _videoEnabled = enableVideo;
+      _cameraEnabled = enableVideo;
     } catch (e) {
       log('Error joining channel: $e');
       rethrow;
@@ -111,8 +131,9 @@ class AgoraService {
         await stopScreenSharing();
       }
 
-      // Disable audio
+      // Disable audio and video
       await _engine!.disableAudio();
+      await _engine!.disableVideo();
 
       // Leave the channel
       await _engine!.leaveChannel();
@@ -122,6 +143,10 @@ class AgoraService {
       _remoteUid = null;
       _muted = false;
       _isScreenSharing = false;
+      _videoEnabled = false;
+      _cameraEnabled = false;
+      _currentChannelName = null;
+      _currentToken = null;
 
       log('Successfully left channel and cleaned up');
     } catch (e) {
@@ -137,6 +162,27 @@ class AgoraService {
       await _engine!.muteLocalAudioStream(_muted);
     } catch (e) {
       log('Error toggling mute: $e');
+    }
+  }
+
+  Future<void> toggleCamera() async {
+    if (_engine == null) return;
+
+    try {
+      _cameraEnabled = !_cameraEnabled;
+      await _engine!.muteLocalVideoStream(!_cameraEnabled);
+    } catch (e) {
+      log('Error toggling camera: $e');
+    }
+  }
+
+  Future<void> switchCamera() async {
+    if (_engine == null) return;
+
+    try {
+      await _engine!.switchCamera();
+    } catch (e) {
+      log('Error switching camera: $e');
     }
   }
 
@@ -222,7 +268,9 @@ class AgoraService {
 
       // Disable all streams
       await _engine?.disableAudio();
+      await _engine?.disableVideo();
       await _engine?.muteLocalAudioStream(true);
+      await _engine?.muteLocalVideoStream(true);
 
       // Leave channel and cleanup
       await leaveChannel();
@@ -230,6 +278,13 @@ class AgoraService {
       // Release the engine but keep singleton intact
       await _engine?.release();
       _engine = null;
+
+      // Clear callbacks
+      onUserJoined = null;
+      onUserOffline = null;
+      onJoinChannelSuccess = null;
+      onLeaveChannel = null;
+      onRemoteVideoStateChanged = null;
 
       log('Call ended completely');
     } catch (e) {
