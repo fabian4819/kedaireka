@@ -22,7 +22,7 @@ class _MapsScreenState extends State<MapsScreen> {
   List<Marker> _markers = [];
   List<Polygon> _polygons = [];
   bool _isLoading = true;
-  bool _isSatelliteView = false; // Toggle between street and satellite view
+  String _mapType = 'osm'; // Options: 'osm', 'satellite', 'esri_topo'
 
   @override
   void initState() {
@@ -127,8 +127,36 @@ class _MapsScreenState extends State<MapsScreen> {
 
   void _toggleMapType() {
     setState(() {
-      _isSatelliteView = !_isSatelliteView;
+      if (_mapType == 'osm') {
+        _mapType = 'satellite';
+      } else if (_mapType == 'satellite') {
+        _mapType = 'esri_topo';
+      } else {
+        _mapType = 'osm';
+      }
     });
+  }
+
+  String _getMapTypeName() {
+    switch (_mapType) {
+      case 'satellite':
+        return 'Satellite';
+      case 'esri_topo':
+        return 'ESRI Topo';
+      default:
+        return 'Street';
+    }
+  }
+
+  IconData _getMapTypeIcon() {
+    switch (_mapType) {
+      case 'satellite':
+        return Icons.satellite;
+      case 'esri_topo':
+        return Icons.terrain;
+      default:
+        return Icons.map;
+    }
   }
 
   void _clearMarkers() {
@@ -167,9 +195,9 @@ class _MapsScreenState extends State<MapsScreen> {
         automaticallyImplyLeading: false,
         actions: [
           IconButton(
-            icon: Icon(_isSatelliteView ? Icons.map : Icons.satellite),
+            icon: Icon(_getMapTypeIcon()),
             onPressed: _toggleMapType,
-            tooltip: 'Toggle Map Type',
+            tooltip: 'Map: ${_getMapTypeName()}',
           ),
           IconButton(
             icon: const Icon(Icons.clear_all),
@@ -205,9 +233,11 @@ class _MapsScreenState extends State<MapsScreen> {
                   ),
                   children: [
                     TileLayer(
-                      urlTemplate: _isSatelliteView
+                      urlTemplate: _mapType == 'satellite'
                           ? 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'
-                          : 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                          : _mapType == 'esri_topo'
+                              ? 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}'
+                              : 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
                       userAgentPackageName: 'com.kedaireka.app',
                     ),
                     MarkerLayer(markers: _markers),
