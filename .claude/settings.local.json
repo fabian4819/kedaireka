@@ -16,7 +16,8 @@
       "Bash(pip install:*)",
       "Bash(python:*)",
       "Bash(pod install:*)",
-      "Bash(open ios/Runner.xcworkspace)"
+      "Bash(open ios/Runner.xcworkspace)",
+      "Bash(git config:*)"
     ],
     "deny": [],
     "ask": []
