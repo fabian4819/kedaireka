@@ -1,0 +1,17 @@
+<dependencies>
+  <compile
+      roots="/Users/fabian/project/kedaireka/kedaireka/android/unityLibrary@@:unityLibrary::release">
+    <dependency
+        name="/Users/fabian/project/kedaireka/kedaireka/android/unityLibrary@@:unityLibrary::release"
+        simpleName="unityLibrary:unityLibrary"/>
+  </compile>
+  <package
+      roots="/Users/fabian/project/kedaireka/kedaireka/android/unityLibrary@@:unityLibrary::release,__local_aars__:/Users/fabian/project/kedaireka/kedaireka/android/unityLibrary/unityLibrary/libs/unity-classes.jar:unspecified@jar">
+    <dependency
+        name="/Users/fabian/project/kedaireka/kedaireka/android/unityLibrary@@:unityLibrary::release"
+        simpleName="unityLibrary:unityLibrary"/>
+    <dependency
+        name="__local_aars__:/Users/fabian/project/kedaireka/kedaireka/android/unityLibrary/unityLibrary/libs/unity-classes.jar:unspecified@jar"
+        simpleName="__local_aars__:/Users/fabian/project/kedaireka/kedaireka/android/unityLibrary/unityLibrary/libs/unity-classes.jar"/>
+  </package>
+</dependencies>

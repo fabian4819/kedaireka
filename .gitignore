@@ -49,10 +49,11 @@ app.*.map.json
 **/unityLibrary/.cxx/
 **/unityLibrary/.gradle/
 **/unityLibrary/src/
+**/unityLibrary/**/symbols/
 **/il2cpp_*
-*.so
-*.aar
-*.a
+openjdk.jdk
+# Note: AAR files in libs/ are needed dependencies
+!**/libs/*.aar
 
 # Development keystores (contains sensitive debug certificates)
 debug.keystore

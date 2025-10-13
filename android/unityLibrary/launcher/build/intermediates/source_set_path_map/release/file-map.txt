@@ -1,0 +1,9 @@
+com.kedaireka.geoclarity.launcher-pngs-0 /Users/fabian/project/kedaireka/kedaireka/android/unityLibrary/launcher/build/generated/res/pngs/release
+com.kedaireka.geoclarity.launcher-resValues-1 /Users/fabian/project/kedaireka/kedaireka/android/unityLibrary/launcher/build/generated/res/resValues/release
+com.kedaireka.geoclarity.launcher-rs-2 /Users/fabian/project/kedaireka/kedaireka/android/unityLibrary/launcher/build/generated/res/rs/release
+com.kedaireka.geoclarity.launcher-mergeReleaseResources-3 /Users/fabian/project/kedaireka/kedaireka/android/unityLibrary/launcher/build/intermediates/incremental/release/mergeReleaseResources/merged.dir
+com.kedaireka.geoclarity.launcher-mergeReleaseResources-4 /Users/fabian/project/kedaireka/kedaireka/android/unityLibrary/launcher/build/intermediates/incremental/release/mergeReleaseResources/stripped.dir
+com.kedaireka.geoclarity.launcher-merged_res-5 /Users/fabian/project/kedaireka/kedaireka/android/unityLibrary/launcher/build/intermediates/merged_res/release
+com.kedaireka.geoclarity.launcher-main-6 /Users/fabian/project/kedaireka/kedaireka/android/unityLibrary/launcher/src/main/res
+com.kedaireka.geoclarity.launcher-release-7 /Users/fabian/project/kedaireka/kedaireka/android/unityLibrary/launcher/src/release/res
+com.kedaireka.geoclarity.launcher-packaged_res-8 /Users/fabian/project/kedaireka/kedaireka/android/unityLibrary/unityLibrary/build/intermediates/packaged_res/release
