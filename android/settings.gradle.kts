@@ -27,3 +27,7 @@ plugins {
 }
 
 include(":app")
+
+// Unity Library Integration
+include(":unityLibrary")
+project(":unityLibrary").projectDir = file("./unityLibrary/unityLibrary")

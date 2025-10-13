@@ -31,10 +31,8 @@ dependencies:
   geolocator: ^10.1.0
   geocoding: ^2.1.1
 
-  # AR & Unity (will be added when needed)
-  # flutter_unity_widget: ^2022.2.0
-  # arcore_flutter_plugin: ^0.0.9
-  # arkit_plugin: ^0.11.0
+  # AR & Unity Integration - Using custom platform channels
+  # flutter_unity_widget removed - using direct integration
 
   # Video Calling
   agora_rtc_engine: ^6.3.0

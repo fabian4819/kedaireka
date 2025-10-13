@@ -9,7 +9,7 @@ plugins {
 }
 
 android {
-    namespace = "com.example.kedaireka"
+    namespace = "com.kedaireka.geoclarity"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
@@ -23,14 +23,17 @@ android {
     }
 
     defaultConfig {
-        // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
-        applicationId = "com.example.kedaireka"
+        // Application ID matches Unity package for consistency
+        applicationId = "com.kedaireka.geoclarity"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
-        minSdk = flutter.minSdkVersion
+        minSdk = 24  // Required for ARCore and Unity integration
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+        ndk {
+            abiFilters += listOf("arm64-v8a")
+        }
     }
 
     buildTypes {
@@ -44,4 +47,9 @@ android {
 
 flutter {
     source = "../.."
+}
+
+dependencies {
+    // Unity Library Integration
+    implementation(project(":unityLibrary"))
 }

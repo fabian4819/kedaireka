@@ -44,6 +44,16 @@ app.*.map.json
 /android/app/profile
 /android/app/release
 
+# Unity generated files
+**/unityLibrary/build/
+**/unityLibrary/.cxx/
+**/unityLibrary/.gradle/
+**/unityLibrary/src/
+**/il2cpp_*
+*.so
+*.aar
+*.a
+
 # Development keystores (contains sensitive debug certificates)
 debug.keystore
 *.keystore

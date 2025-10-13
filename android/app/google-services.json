@@ -9,7 +9,7 @@
       "client_info": {
         "mobilesdk_app_id": "1:433420738342:android:f740cfd4a650484c9eebe7",
         "android_client_info": {
-          "package_name": "com.example.kedaireka"
+          "package_name": "com.kedaireka.geoclarity"
         }
       },
       "oauth_client": [
@@ -17,7 +17,7 @@
           "client_id": "433420738342-fq1pbb8shro0us1n4p7e4ek3lj5k8rd2.apps.googleusercontent.com",
           "client_type": 1,
           "android_info": {
-            "package_name": "com.example.kedaireka",
+            "package_name": "com.kedaireka.geoclarity",
             "certificate_hash": "bedd2fc0ee11cee8caf4591cf4e1e28def92ae96"
           }
         },
@@ -42,7 +42,7 @@
               "client_id": "433420738342-uf3hgs22qgjg116o0emje0dghnbnb7gg.apps.googleusercontent.com",
               "client_type": 2,
               "ios_info": {
-                "bundle_id": "com.example.kedaireka"
+                "bundle_id": "com.kedaireka.geoclarity"
               }
             }
           ]
