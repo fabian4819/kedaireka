@@ -26,8 +26,24 @@ plugins {
     id("org.jetbrains.kotlin.android") version "2.1.0" apply false
 }
 
+dependencyResolutionManagement {
+    repositoriesMode.set(RepositoriesMode.PREFER_PROJECT)
+    repositories {
+        google()
+        mavenCentral()
+        // Unity library dependencies
+        flatDir {
+            dirs("${settingsDir}/unityLibrary/unityLibrary/libs")
+        }
+    }
+}
+
 include(":app")
 
 // Unity Library Integration
 include(":unityLibrary")
 project(":unityLibrary").projectDir = file("./unityLibrary/unityLibrary")
+
+// XR Manifest Library (required by Unity ARCore)
+include(":xrmanifest.androidlib")
+project(":xrmanifest.androidlib").projectDir = file("./unityLibrary/unityLibrary/xrmanifest.androidlib")

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:permission_handler/permission_handler.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/services/unity_channel_service.dart';
 
@@ -91,6 +92,30 @@ class _ARScreenState extends State<ARScreen> with WidgetsBindingObserver {
   Future<void> _launchUnity() async {
     try {
       setState(() {
+        _statusMessage = 'Checking permissions...';
+      });
+
+      // Check camera permission (required for ARCore)
+      PermissionStatus cameraStatus = await Permission.camera.status;
+      if (!cameraStatus.isGranted) {
+        cameraStatus = await Permission.camera.request();
+        if (!cameraStatus.isGranted) {
+          setState(() {
+            _statusMessage = 'Camera permission is required for AR';
+          });
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Camera permission is required for AR functionality'),
+                duration: Duration(seconds: 3),
+              ),
+            );
+          }
+          return;
+        }
+      }
+
+      setState(() {
         _statusMessage = 'Launching Unity AR...';
       });
 
@@ -121,6 +146,15 @@ class _ARScreenState extends State<ARScreen> with WidgetsBindingObserver {
       setState(() {
         _statusMessage = 'Error launching AR: $e';
       });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: $e'),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 5),
+          ),
+        );
+      }
     }
   }
 
