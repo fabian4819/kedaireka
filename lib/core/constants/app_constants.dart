@@ -6,6 +6,7 @@ class AppConstants {
   // Navigation Routes
   static const String splashRoute = '/';
   static const String authRoute = '/auth';
+  static const String emailVerificationRoute = '/email-verification';
   static const String homeRoute = '/home';
   static const String mapsRoute = '/maps';
   static const String arRoute = '/ar';

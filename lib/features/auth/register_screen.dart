@@ -51,6 +51,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
       listener: (context, state) {
         if (state is AuthAuthenticated) {
           context.go(AppConstants.homeRoute);
+        } else if (state is AuthEmailVerificationSent) {
+          // Navigate to email verification screen after registration
+          context.go(AppConstants.emailVerificationRoute);
         } else if (state is AuthError) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(

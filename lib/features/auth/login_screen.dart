@@ -56,6 +56,9 @@ class _LoginScreenState extends State<LoginScreen> {
       listener: (context, state) {
         if (state is AuthAuthenticated) {
           context.go(AppConstants.homeRoute);
+        } else if (state is AuthEmailNotVerified) {
+          // Redirect to email verification screen if email not verified
+          context.go(AppConstants.emailVerificationRoute);
         } else if (state is AuthError) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(

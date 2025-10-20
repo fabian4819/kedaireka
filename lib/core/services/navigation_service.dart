@@ -2,6 +2,7 @@ import 'package:go_router/go_router.dart';
 import '../../features/splash/splash_screen.dart';
 import '../../features/auth/login_screen.dart';
 import '../../features/auth/register_screen.dart';
+import '../../features/auth/email_verification_screen.dart';
 import '../../features/home/home_screen.dart';
 import '../../features/maps/maps_screen.dart';
 import '../../features/ar/ar_screen.dart';
@@ -29,6 +30,11 @@ class NavigationService {
         path: '/register',
         name: 'register',
         builder: (context, state) => const RegisterScreen(),
+      ),
+      GoRoute(
+        path: AppConstants.emailVerificationRoute,
+        name: 'email_verification',
+        builder: (context, state) => const EmailVerificationScreen(),
       ),
       GoRoute(
         path: AppConstants.homeRoute,

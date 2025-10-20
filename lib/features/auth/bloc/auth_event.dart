@@ -47,3 +47,7 @@ class AuthPasswordResetRequested extends AuthEvent {
   @override
   List<Object> get props => [email];
 }
+
+class AuthEmailVerificationRequested extends AuthEvent {}
+
+class AuthEmailVerificationChecked extends AuthEvent {}

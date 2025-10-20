@@ -20,22 +20,34 @@ class AuthService {
 
   Future<UserCredential?> signInWithEmailAndPassword(String email, String password) async {
     try {
-      return await _auth.signInWithEmailAndPassword(
+      print('DEBUG: Attempting to sign in with email: $email');
+      final result = await _auth.signInWithEmailAndPassword(
         email: email,
         password: password,
       );
+      print('DEBUG: Sign in successful. User: ${result.user?.email}, Email verified: ${result.user?.emailVerified}');
+      return result;
     } on FirebaseAuthException catch (e) {
+      print('DEBUG: Sign in failed with error code: ${e.code}, message: ${e.message}');
       throw _handleFirebaseAuthException(e);
     }
   }
 
   Future<UserCredential?> createUserWithEmailAndPassword(String email, String password) async {
     try {
-      return await _auth.createUserWithEmailAndPassword(
+      print('DEBUG: Attempting to create account with email: $email');
+      final userCredential = await _auth.createUserWithEmailAndPassword(
         email: email,
         password: password,
       );
+      print('DEBUG: Account created successfully. User: ${userCredential.user?.email}');
+      // Automatically send verification email after account creation
+      print('DEBUG: Sending verification email...');
+      await sendEmailVerification();
+      print('DEBUG: Verification email sent successfully');
+      return userCredential;
     } on FirebaseAuthException catch (e) {
+      print('DEBUG: Account creation failed with error code: ${e.code}, message: ${e.message}');
       throw _handleFirebaseAuthException(e);
     }
   }
@@ -169,6 +181,68 @@ class AuthService {
     }
   }
 
+  // Email Verification Methods
+  Future<void> sendEmailVerification() async {
+    try {
+      final user = _auth.currentUser;
+      if (user == null) {
+        throw 'No user is currently signed in.';
+      }
+      if (user.emailVerified) {
+        throw 'Email is already verified.';
+      }
+      await user.sendEmailVerification();
+    } on FirebaseAuthException catch (e) {
+      // Handle specific error for already verified or credential issues
+      if (e.code == 'invalid-credential' || e.code == 'credential-already-in-use') {
+        throw 'Please log out and log back in, then try again.';
+      }
+      throw _handleFirebaseAuthException(e);
+    } catch (e) {
+      if (e is String) rethrow;
+      throw 'Failed to send verification email: $e';
+    }
+  }
+
+  Future<void> reloadUser() async {
+    try {
+      final user = _auth.currentUser;
+      if (user == null) {
+        throw 'No user is currently signed in.';
+      }
+      await user.reload();
+    } on FirebaseAuthException catch (e) {
+      // Handle credential issues gracefully
+      if (e.code == 'invalid-credential' || e.code == 'user-token-expired') {
+        throw 'Your session has expired. Please log in again.';
+      }
+      throw _handleFirebaseAuthException(e);
+    } catch (e) {
+      if (e is String) rethrow;
+      throw 'Failed to refresh user data: $e';
+    }
+  }
+
+  bool get isEmailVerified {
+    return _auth.currentUser?.emailVerified ?? false;
+  }
+
+  Future<bool> checkEmailVerified() async {
+    try {
+      await reloadUser();
+      return isEmailVerified;
+    } on FirebaseAuthException catch (e) {
+      // Handle credential issues by returning current state
+      if (e.code == 'invalid-credential' || e.code == 'user-token-expired') {
+        throw 'Your session has expired. Please log in again.';
+      }
+      throw _handleFirebaseAuthException(e);
+    } catch (e) {
+      if (e is String) rethrow;
+      throw 'Failed to check email verification status: $e';
+    }
+  }
+
   String _handleFirebaseAuthException(FirebaseAuthException e) {
     switch (e.code) {
       case 'user-not-found':
@@ -188,13 +262,21 @@ class AuthService {
       case 'email-already-in-use':
         return 'The account already exists for that email.';
       case 'invalid-credential':
-        return 'The supplied auth credential is malformed or has expired.';
+        return 'Invalid email or password. Please check your credentials and try again.\n\nIf you haven\'t registered yet, please create an account first.';
       case 'account-exists-with-different-credential':
         return 'An account already exists with the same email address but different sign-in credentials.';
       case 'requires-recent-login':
         return 'This operation is sensitive and requires recent authentication.';
+      case 'user-token-expired':
+        return 'Your session has expired. Please log in again.';
+      case 'network-request-failed':
+        return 'Network error. Please check your internet connection and try again.';
+      case 'too-many-requests':
+        return 'Too many failed attempts. Please try again later.';
       default:
-        return 'An authentication error occurred: ${e.message}';
+        // Log the full error for debugging
+        print('DEBUG: Unhandled FirebaseAuthException - Code: ${e.code}, Message: ${e.message}');
+        return 'Authentication error: ${e.message ?? e.code}';
     }
   }
 }
