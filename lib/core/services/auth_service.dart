@@ -253,8 +253,6 @@ class AuthService {
         return 'The email address is not valid.';
       case 'user-disabled':
         return 'This user account has been disabled.';
-      case 'too-many-requests':
-        return 'Too many requests. Try again later.';
       case 'operation-not-allowed':
         return 'Signing in with Email and Password is not enabled.';
       case 'weak-password':

@@ -53,8 +53,17 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         emit(AuthAuthenticated(user: user));
       }
     } else {
-      print('DEBUG AuthBloc: No user, emitting AuthUnauthenticated');
-      emit(AuthUnauthenticated());
+      // Don't emit unauthenticated if we're already authenticated or in a transient state
+      // This prevents race conditions from logging users out
+      if (state is! AuthAuthenticated &&
+          state is! AuthEmailVerificationSent &&
+          state is! AuthEmailNotVerified &&
+          state is! AuthPasswordResetSent) {
+        print('DEBUG AuthBloc: No user, emitting AuthUnauthenticated');
+        emit(AuthUnauthenticated());
+      } else {
+        print('DEBUG AuthBloc: User is null but maintaining current state: $state');
+      }
     }
   }
 
@@ -105,9 +114,15 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     AuthLogoutRequested event,
     Emitter<AuthState> emit,
   ) async {
+    print('DEBUG AuthBloc: Logout requested');
     try {
       await _authService.signOut();
+      print('DEBUG AuthBloc: Sign out successful');
+      // Explicitly emit unauthenticated state after logout
+      emit(AuthUnauthenticated());
+      print('DEBUG AuthBloc: Emitted AuthUnauthenticated');
     } catch (e) {
+      print('DEBUG AuthBloc: Logout error: $e');
       emit(AuthError(message: e.toString()));
     }
   }

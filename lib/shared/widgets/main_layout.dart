@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/constants/app_constants.dart';
 import '../../core/theme/app_theme.dart';
+import '../../features/auth/bloc/auth_bloc.dart';
+import '../../features/auth/bloc/auth_state.dart';
 
 class MainLayout extends StatelessWidget {
   final Widget child;
@@ -15,8 +18,17 @@ class MainLayout extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: child,
+    return BlocListener<AuthBloc, AuthState>(
+      listener: (context, state) {
+        print('DEBUG MainLayout: State changed to $state');
+        if (state is AuthUnauthenticated) {
+          print('DEBUG MainLayout: Navigating to auth screen');
+          // User logged out, redirect to auth screen
+          context.go(AppConstants.authRoute);
+        }
+      },
+      child: Scaffold(
+        body: child,
       bottomNavigationBar: _shouldShowBottomNav(currentRoute)
           ? BottomNavigationBar(
               type: BottomNavigationBarType.fixed,
@@ -48,6 +60,7 @@ class MainLayout extends StatelessWidget {
               ],
             )
           : null,
+      ),
     );
   }
 
