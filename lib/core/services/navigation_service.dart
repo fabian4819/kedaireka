@@ -9,6 +9,8 @@ import '../../features/ar/ar_screen.dart';
 import '../../features/videocall/videocall_screen.dart';
 import '../../features/projects/projects_screen.dart';
 import '../../features/projects/project_detail_screen.dart';
+import '../../features/profile/profile_screen.dart';
+import '../../features/settings/settings_screen.dart';
 import '../../shared/widgets/main_layout.dart';
 import '../constants/app_constants.dart';
 
@@ -81,8 +83,24 @@ class NavigationService {
         name: 'project_detail',
         builder: (context, state) {
           final projectId = state.pathParameters['id'] ?? '';
-          return ProjectDetailScreen(projectId: projectId);
+          return MainLayout(
+            currentRoute: AppConstants.projectsRoute,
+            child: ProjectDetailScreen(projectId: projectId),
+          );
         },
+      ),
+      GoRoute(
+        path: AppConstants.profileRoute,
+        name: 'profile',
+        builder: (context, state) => MainLayout(
+          currentRoute: AppConstants.profileRoute,
+          child: const ProfileScreen(),
+        ),
+      ),
+      GoRoute(
+        path: AppConstants.settingsRoute,
+        name: 'settings',
+        builder: (context, state) => const SettingsScreen(),
       ),
     ],
   );

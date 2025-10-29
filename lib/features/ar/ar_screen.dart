@@ -16,7 +16,7 @@ class _ARScreenState extends State<ARScreen> with WidgetsBindingObserver {
 
   bool _isARInitialized = false;
   bool _isMeasuring = false;
-  String _statusMessage = 'Ready to launch AR';
+  String _statusMessage = 'AR Mapping feature coming soon!';
 
   // Measurement data
   int _pointCount = 0;
@@ -28,7 +28,7 @@ class _ARScreenState extends State<ARScreen> with WidgetsBindingObserver {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _setupUnityMessageListener();
-    _initializeLocation();
+    // _initializeLocation(); // Disabled - AR feature coming soon
   }
 
   @override
@@ -336,11 +336,18 @@ class _ARScreenState extends State<ARScreen> with WidgetsBindingObserver {
               // Launch/Control Buttons
               if (!_isARInitialized)
                 ElevatedButton.icon(
-                  onPressed: _launchUnity,
+                  onPressed: () {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('AR Mapping feature coming soon!'),
+                        duration: Duration(seconds: 2),
+                      ),
+                    );
+                  },
                   icon: const Icon(Icons.play_arrow),
                   label: const Text('Launch Unity AR'),
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: AppTheme.primaryColor,
+                    backgroundColor: Colors.grey,
                     foregroundColor: Colors.white,
                     padding: const EdgeInsets.symmetric(
                       horizontal: 32,

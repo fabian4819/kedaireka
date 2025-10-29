@@ -49,12 +49,23 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
           print('DEBUG AuthBloc: Skipping emit, already in state: $state');
         }
       } else {
-        print('DEBUG AuthBloc: Emitting AuthAuthenticated');
-        emit(AuthAuthenticated(user: user));
+        // Only emit if not already authenticated with the same user
+        if (state is! AuthAuthenticated || (state as AuthAuthenticated).user.uid != user.uid) {
+          print('DEBUG AuthBloc: Emitting AuthAuthenticated');
+          emit(AuthAuthenticated(user: user));
+        } else {
+          print('DEBUG AuthBloc: Already authenticated with same user, skipping emit');
+        }
       }
     } else {
       // Don't emit unauthenticated if we're already authenticated or in a transient state
       // This prevents race conditions from logging users out
+      // Also prevent emitting if already unauthenticated to avoid unnecessary rebuilds
+      if (state is AuthUnauthenticated) {
+        print('DEBUG AuthBloc: Already unauthenticated, skipping emit');
+        return;
+      }
+
       if (state is! AuthAuthenticated &&
           state is! AuthEmailVerificationSent &&
           state is! AuthEmailNotVerified &&

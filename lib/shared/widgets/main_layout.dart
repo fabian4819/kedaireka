@@ -50,12 +50,12 @@ class MainLayout extends StatelessWidget {
                   label: 'AR',
                 ),
                 BottomNavigationBarItem(
-                  icon: Icon(Icons.screen_share),
-                  label: 'Share',
-                ),
-                BottomNavigationBarItem(
                   icon: Icon(Icons.folder),
                   label: 'Projects',
+                ),
+                BottomNavigationBarItem(
+                  icon: Icon(Icons.person),
+                  label: 'Profile',
                 ),
               ],
             )
@@ -70,8 +70,8 @@ class MainLayout extends StatelessWidget {
       AppConstants.homeRoute,
       AppConstants.mapsRoute,
       AppConstants.arRoute,
-      AppConstants.videocallRoute,
       AppConstants.projectsRoute,
+      AppConstants.profileRoute,
     ];
     return mainRoutes.contains(route);
   }
@@ -84,9 +84,9 @@ class MainLayout extends StatelessWidget {
         return 1;
       case AppConstants.arRoute:
         return 2;
-      case AppConstants.videocallRoute:
-        return 3;
       case AppConstants.projectsRoute:
+        return 3;
+      case AppConstants.profileRoute:
         return 4;
       default:
         return 0;
@@ -105,10 +105,10 @@ class MainLayout extends StatelessWidget {
         context.go(AppConstants.arRoute);
         break;
       case 3:
-        context.go(AppConstants.videocallRoute);
+        context.go(AppConstants.projectsRoute);
         break;
       case 4:
-        context.go(AppConstants.projectsRoute);
+        context.go(AppConstants.profileRoute);
         break;
     }
   }

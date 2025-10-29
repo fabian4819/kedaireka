@@ -13,7 +13,7 @@ class HomeScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('KEDAIREKA'),
+        title: const Text('Pix2Land'),
         actions: [
           PopupMenuButton<String>(
             icon: const Icon(Icons.person),
@@ -66,7 +66,7 @@ class HomeScreen extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     const Text(
-                      'Welcome to KEDAIREKA',
+                      'Welcome to Pix2Land',
                       style: TextStyle(
                         fontSize: 20,
                         fontWeight: FontWeight.bold,
@@ -121,7 +121,14 @@ class HomeScreen extends StatelessWidget {
                   title: 'AR Mapping',
                   subtitle: 'Start AR measurement',
                   color: AppTheme.accentColor,
-                  onTap: () => context.go(AppConstants.arRoute),
+                  onTap: () {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('AR Mapping feature coming soon!'),
+                        duration: Duration(seconds: 2),
+                      ),
+                    );
+                  },
                 ),
                 _ActionCard(
                   icon: Icons.video_call,

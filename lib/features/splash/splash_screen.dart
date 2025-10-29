@@ -40,13 +40,14 @@ class _SplashScreenState extends State<SplashScreen> {
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    // App Icon/Logo placeholder
+                    // App Icon/Logo
                     Container(
-                      width: 120,
-                      height: 120,
+                      width: 150,
+                      height: 150,
+                      padding: const EdgeInsets.all(20),
                       decoration: BoxDecoration(
                         color: Colors.white,
-                        borderRadius: BorderRadius.circular(20),
+                        borderRadius: BorderRadius.circular(30),
                         boxShadow: [
                           BoxShadow(
                             color: Colors.black.withValues(alpha: 0.1),
@@ -55,10 +56,9 @@ class _SplashScreenState extends State<SplashScreen> {
                           ),
                         ],
                       ),
-                      child: const Icon(
-                        Icons.map,
-                        size: 60,
-                        color: AppTheme.primaryColor,
+                      child: Image.asset(
+                        'assets/logos/logo-pix2land.png',
+                        fit: BoxFit.contain,
                       ),
                     )
                         .animate()

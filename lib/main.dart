@@ -38,7 +38,7 @@ class KedairekaApp extends StatelessWidget {
       child: Builder(
         builder: (context) {
           return MaterialApp.router(
-            title: 'KEDAIREKA',
+            title: 'Pix2Land',
             theme: AppTheme.lightTheme,
             darkTheme: AppTheme.darkTheme,
             routerConfig: NavigationService.router,

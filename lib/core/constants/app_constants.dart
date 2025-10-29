@@ -1,5 +1,5 @@
 class AppConstants {
-  static const String appName = 'KEDAIREKA';
+  static const String appName = 'Pix2Land';
   static const String appVersion = '1.0.0';
   static const String appDescription = 'Geodetic AR Application for Land and Building Mapping';
 
@@ -13,6 +13,7 @@ class AppConstants {
   static const String videocallRoute = '/videocall';
   static const String projectsRoute = '/projects';
   static const String profileRoute = '/profile';
+  static const String settingsRoute = '/settings';
 
   // Firebase Collections
   static const String usersCollection = 'users';

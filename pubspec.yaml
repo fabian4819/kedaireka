@@ -1,5 +1,5 @@
-name: kedaireka
-description: "KEDAIREKA - Geodetic AR Application for Land and Building Mapping"
+name: pix2land
+description: "Pix2Land - Geodetic AR Application for Land and Building Mapping"
 publish_to: 'none'
 version: 1.0.0+1
 
@@ -71,7 +71,7 @@ flutter:
 
 flutter_launcher_icons:
   android: true
-  ios: false
-  image_path: "assets/logos/app_icon.png"
-  adaptive_icon_background: "#FFFFFF"
-  adaptive_icon_foreground: "assets/logos/app_icon_foreground.png"
+  ios: true
+  image_path: "assets/logos/logo-pix2land.png"
+  adaptive_icon_background: "#4CAF50"
+  adaptive_icon_foreground: "assets/logos/logo-pix2land.png"

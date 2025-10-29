@@ -39,6 +39,14 @@ class AgoraService {
 
   Future<void> initialize() async {
     try {
+      // Validate Agora App ID
+      if (AgoraConfig.appId == 'YOUR_AGORA_APP_ID' || AgoraConfig.appId.isEmpty) {
+        throw Exception(
+          'Agora App ID not configured. Please set your Agora App ID in lib/core/config/agora_config.dart\n'
+          'Get your App ID from https://console.agora.io/'
+        );
+      }
+
       // Request permissions
       await _requestPermissions();
 

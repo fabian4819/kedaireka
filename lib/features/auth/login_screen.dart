@@ -83,21 +83,17 @@ class _LoginScreenState extends State<LoginScreen> {
                 child: Column(
                   children: [
                     Container(
-                      width: 80,
-                      height: 80,
-                      decoration: BoxDecoration(
-                        color: AppTheme.primaryColor,
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                      child: const Icon(
-                        Icons.map,
-                        size: 40,
-                        color: Colors.white,
+                      width: 100,
+                      height: 100,
+                      padding: const EdgeInsets.all(8),
+                      child: Image.asset(
+                        'assets/logos/logo-pix2land.png',
+                        fit: BoxFit.contain,
                       ),
                     ),
                     const SizedBox(height: 16),
                     const Text(
-                      'Welcome to KEDAIREKA',
+                      'Welcome to Pix2Land',
                       style: TextStyle(
                         fontSize: 24,
                         fontWeight: FontWeight.bold,

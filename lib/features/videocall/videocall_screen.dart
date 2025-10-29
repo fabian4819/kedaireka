@@ -243,7 +243,7 @@ class _VideocallScreenState extends State<VideocallScreen> {
               ),
               const SizedBox(height: 32),
               const Text(
-                'KEDAIREKA Video Call',
+                'Pix2Land Video Call',
                 style: TextStyle(
                   fontSize: 28,
                   fontWeight: FontWeight.bold,
