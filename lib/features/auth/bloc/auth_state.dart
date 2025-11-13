@@ -1,5 +1,5 @@
 import 'package:equatable/equatable.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+import '../../../core/models/backend_user_model.dart';
 
 abstract class AuthState extends Equatable {
   const AuthState();
@@ -13,7 +13,7 @@ class AuthInitial extends AuthState {}
 class AuthLoading extends AuthState {}
 
 class AuthAuthenticated extends AuthState {
-  final User user;
+  final BackendUser user;
 
   const AuthAuthenticated({required this.user});
 
@@ -42,7 +42,7 @@ class AuthPasswordResetSent extends AuthState {
 }
 
 class AuthEmailNotVerified extends AuthState {
-  final User user;
+  final BackendUser user;
 
   const AuthEmailNotVerified({required this.user});
 
@@ -51,7 +51,7 @@ class AuthEmailNotVerified extends AuthState {
 }
 
 class AuthEmailVerificationSent extends AuthState {
-  final User user;
+  final BackendUser user;
 
   const AuthEmailVerificationSent({required this.user});
 

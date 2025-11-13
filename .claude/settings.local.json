@@ -16,7 +16,18 @@
       "Bash(adb logcat:*)",
       "Bash(find:*)",
       "Bash(flutter pub get:*)",
-      "Bash(flutter pub run:*)"
+      "Bash(flutter pub run:*)",
+      "Bash(flutter doctor:*)",
+      "Bash(echo:*)",
+      "Bash(/usr/libexec/java_home:*)",
+      "Bash(flutter:*)",
+      "Bash(brew:*)",
+      "Bash(open:*)",
+      "Bash(pod install:*)",
+      "Bash(export JAVA_HOME=/opt/homebrew/opt/openjdk@17:*)",
+      "Bash(export PATH=\"/opt/homebrew/opt/openjdk@17/bin:$PATH\":*)",
+      "Bash(rm:*)",
+      "Bash(pod cache clean:*)"
     ],
     "deny": [],
     "ask": []
