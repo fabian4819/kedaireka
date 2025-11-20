@@ -1,11 +1,13 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart' as mb;
 import 'package:latlong2/latlong.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:http/http.dart' as http;
 import '../../core/theme/app_theme.dart';
 import '../../core/config/app_config.dart';
-import '../../core/models/map_section.dart';
+import '../../core/services/map_tiles_service.dart';
 
 class MapsScreen extends StatefulWidget {
   const MapsScreen({super.key});
@@ -17,106 +19,89 @@ class MapsScreen extends StatefulWidget {
 class _MapsScreenState extends State<MapsScreen> {
   late mb.MapboxMap _mapboxMap;
 
-  // Default location (Universitas Gadjah Mada, Yogyakarta)
-  static const LatLng _initialPosition = LatLng(-7.771043857941956, 110.37910160750407);
-  static const double _initialZoom = 18.0;
+  // Default location centered on tiles/buildings data area (Jakarta)
+  static const LatLng _initialPosition = LatLng(-6.2085, 106.8205); // Center of tile/building data
+  static const double _initialZoom = 14.0; // Slightly zoomed out for better tile visibility
 
   Position? _currentPosition;
-  final List<mb.PointAnnotation> _markers = [];
   bool _isLoading = true;
-  String _currentStyle = 'custom'; // Options: 'custom', 'satellite', 'street', 'light', 'dark'
-  mb.PointAnnotationManager? _pointAnnotationManager;
+  bool _isLoadingTiles = false;
+  String _currentStyle = 'custom';
   double _currentZoom = _initialZoom;
 
-  // WMS Sections
-  List<MapSection> _sections = [];
-  MapSection? _selectedSection;
-  bool _showSections = true;
+  // Tiles and Buildings from backend
+  List<MapTile> _tiles = [];
+  MapTile? _selectedTile;
+  bool _showTiles = true;
+
+  // Raw GeoJSON data from backend (bypass coordinate parsing bug)
+  Map<String, dynamic> _rawTilesGeoJson = {};
 
   @override
   void initState() {
     super.initState();
-    _getCurrentLocation();
-    _loadSections();
+    debugPrint('🗺️ Maps Screen: initState - Starting initialization...');
+    _initializeData();
   }
 
-  void _loadSections() {
-    // Sample WMS sections data - Replace with actual WMS data
-    setState(() {
-      _sections = [
-        MapSection(
-          id: 'section_1',
-          name: 'UGM Campus Area',
-          description: 'Main campus area including faculty buildings and facilities',
-          bounds: MapSectionBounds(
-            north: -7.768,
-            south: -7.775,
-            east: 110.383,
-            west: 110.375,
-          ),
-          wmsUrl: 'https://example.com/wms',
-          layers: ['cadastral', 'buildings'],
-          area: 125000,
-          category: 'cadastral',
-          lastUpdated: DateTime.now().subtract(const Duration(days: 5)),
-        ),
-        MapSection(
-          id: 'section_2',
-          name: 'Northern District',
-          description: 'Residential and commercial zones',
-          bounds: MapSectionBounds(
-            north: -7.761,
-            south: -7.768,
-            east: 110.383,
-            west: 110.375,
-          ),
-          wmsUrl: 'https://example.com/wms',
-          layers: ['land_use', 'roads'],
-          area: 98500,
-          category: 'land_use',
-          lastUpdated: DateTime.now().subtract(const Duration(days: 12)),
-        ),
-        MapSection(
-          id: 'section_3',
-          name: 'Southern Green Area',
-          description: 'Parks and recreational spaces',
-          bounds: MapSectionBounds(
-            north: -7.768,
-            south: -7.775,
-            east: 110.391,
-            west: 110.383,
-          ),
-          wmsUrl: 'https://example.com/wms',
-          layers: ['topographic', 'vegetation'],
-          area: 76300,
-          category: 'topographic',
-          lastUpdated: DateTime.now().subtract(const Duration(days: 3)),
-        ),
-        MapSection(
-          id: 'section_4',
-          name: 'Eastern Development Zone',
-          description: 'Planned development area with infrastructure',
-          bounds: MapSectionBounds(
-            north: -7.754,
-            south: -7.761,
-            east: 110.391,
-            west: 110.383,
-          ),
-          wmsUrl: 'https://example.com/wms',
-          layers: ['planning', 'infrastructure'],
-          area: 142000,
-          category: 'planning',
-          lastUpdated: DateTime.now().subtract(const Duration(days: 1)),
-        ),
-      ];
-    });
+  Future<void> _initializeData() async {
+    // Skip location detection to always center on data area
+    // await _getCurrentLocation();
+    debugPrint('🗺️ Using data-centered map position: lng=${_initialPosition.longitude}, lat=${_initialPosition.latitude}');
+    debugPrint('🗺️ Maps Screen: Loading tiles only...');
+
+    // Set initial loading state to false since we're not doing location detection
+    setState(() => _isLoading = false);
+
+    await _loadTilesOnly();
+    // Don't load buildings on maps screen - only on AR screen
   }
 
+  Future<void> _loadTilesOnly() async {
+    setState(() => _isLoadingTiles = true);
+    try {
+      debugPrint('🗺️ Maps Screen: Loading raw GeoJSON tiles data...');
+
+      // Fetch raw tiles data directly from backend API
+      const String _baseUrl = String.fromEnvironment(
+        'API_BASE_URL',
+        defaultValue: 'https://pix2land-backend.vercel.app',
+      );
+
+      final response = await http.get(
+        Uri.parse('$_baseUrl/tiles'),
+        headers: {'Content-Type': 'application/json'},
+      );
+
+      if (response.statusCode == 200) {
+        final rawGeoJson = jsonDecode(response.body);
+        setState(() {
+          _rawTilesGeoJson = rawGeoJson;
+          _isLoadingTiles = false;
+        });
+        debugPrint('🗺️ Maps Screen: Loaded raw GeoJSON with ${rawGeoJson['features'].length} tiles');
+
+        // Still load parsed tiles for UI functionality (but we won't use coordinates for rendering)
+        final tiles = await MapTilesService().getTiles();
+        _tiles = tiles;
+      } else {
+        throw Exception('Failed to load tiles: ${response.statusCode}');
+      }
+    } catch (e) {
+      setState(() => _isLoadingTiles = false);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error loading tiles: $e')),
+        );
+      }
+    }
+  }
+
+  
   Future<void> _getCurrentLocation() async {
     try {
       bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
       if (!serviceEnabled) {
-        _showLocationError('Location services are disabled.');
         _useDefaultLocation();
         return;
       }
@@ -125,14 +110,12 @@ class _MapsScreenState extends State<MapsScreen> {
       if (permission == LocationPermission.denied) {
         permission = await Geolocator.requestPermission();
         if (permission == LocationPermission.denied) {
-          _showLocationError('Location permissions denied. Using default location.');
           _useDefaultLocation();
           return;
         }
       }
 
       if (permission == LocationPermission.deniedForever) {
-        _showLocationError('Location permissions permanently denied. Using default location.');
         _useDefaultLocation();
         return;
       }
@@ -149,44 +132,21 @@ class _MapsScreenState extends State<MapsScreen> {
 
       // Add current location marker after map is ready
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        _addCurrentLocationMarker(position);
+        _addCurrentLocationMarker();
       });
-
-      // Show success message
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Location acquired successfully'),
-            duration: Duration(seconds: 2),
-            backgroundColor: Colors.green,
-          ),
-        );
-      }
-
     } catch (e) {
-      String errorMessage = 'Error getting location: $e';
-
-      // Check for common iOS emulator issues
-      if (e.toString().contains('permission') || e.toString().contains('Permission')) {
-        errorMessage = 'Location permission issue. Using default location for now.';
-      } else if (e.toString().contains('timeout') || e.toString().contains('Timeout')) {
-        errorMessage = 'Location request timed out. Using default location.';
-      } else if (e.toString().contains('location') && e.toString().contains('unavailable')) {
-        errorMessage = 'Location services unavailable. Using default location.';
-      }
-
-      _showLocationError(errorMessage);
       _useDefaultLocation();
     }
   }
 
   void _useDefaultLocation() {
     setState(() {
+      // Use Jakarta location that's close to tiles and buildings data
       _currentPosition = Position(
         latitude: _initialPosition.latitude,
         longitude: _initialPosition.longitude,
         timestamp: DateTime.now(),
-        accuracy: 100.0,
+        accuracy: 10.0,
         altitude: 0.0,
         altitudeAccuracy: 0.0,
         heading: 0.0,
@@ -196,157 +156,320 @@ class _MapsScreenState extends State<MapsScreen> {
       );
       _isLoading = false;
     });
-
-    // Add marker for default location
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _addCurrentLocationMarker(_currentPosition!);
-    });
   }
 
   void _onMapCreated(mb.MapboxMap mapboxMap) {
     _mapboxMap = mapboxMap;
-    _initializeAnnotationManagers();
+    _initializeLayers();
   }
 
-  Future<void> _initializeAnnotationManagers() async {
+  Future<void> _initializeLayers() async {
     try {
-      _pointAnnotationManager = await _mapboxMap.annotations.createPointAnnotationManager();
+      debugPrint('🗺️ Initializing map layers...');
+      debugPrint('🗺️ Available tiles: ${_tiles.length}');
 
       // Add current location marker if available
       if (_currentPosition != null) {
-        _addCurrentLocationMarker(_currentPosition!);
+        _addCurrentLocationMarker();
+      }
+
+      // Wait for map to be fully loaded before adding layers
+      await Future.delayed(const Duration(milliseconds: 1000));
+
+      // Add tiles layer using source-layer system
+      if (_tiles.isNotEmpty) {
+        debugPrint('🗺️ Tiles are available, adding tiles layer...');
+        await _addTilesLayer();
+        debugPrint('🗺️ Tiles layer added, now centering map on tile data...');
+        // Auto-center map on tile data area
+        await _centerMapOnTiles();
+        debugPrint('🗺️ Map centering completed');
+      } else {
+        debugPrint('⚠️ No tiles available to add to map');
+      }
+
+      debugPrint('🗺️ Map layers initialized successfully');
+    } catch (e) {
+      debugPrint('❌ Error initializing map layers: $e');
+      debugPrint('❌ Stack trace: ${StackTrace.current}');
+    }
+  }
+
+  Future<void> _centerMapOnTiles() async {
+    try {
+      debugPrint('🗺️ Auto-centering map on tile data...');
+
+      // Calculate the center point of all tiles
+      double totalLat = 0;
+      double totalLng = 0;
+      int count = 0;
+
+      for (final tile in _tiles) {
+        debugPrint('🗺️ DEBUG: Processing tile ID: ${tile.id}');
+        debugPrint('🗺️ DEBUG: Tile coordinates length: ${tile.coordinates.length}');
+        if (tile.coordinates.isNotEmpty && tile.coordinates[0].isNotEmpty && tile.coordinates[0][0].isNotEmpty) {
+          debugPrint('🗺️ DEBUG: First coordinate point: ${tile.coordinates[0][0][0]}, ${tile.coordinates[0][0][1]}');
+        }
+        final center = tile.getCenter();
+        debugPrint('🗺️ DEBUG: Tile ${tile.id} center: ${center.latitude}, ${center.longitude}');
+        totalLat += center.latitude;
+        totalLng += center.longitude;
+        count++;
+
+        // Only process first 5 tiles to avoid log spam
+        if (count >= 5) {
+          debugPrint('🗺️ DEBUG: Processing remaining ${_tiles.length - 5} tiles silently...');
+          // Calculate the rest without detailed logging
+          for (int i = 5; i < _tiles.length; i++) {
+            final tile = _tiles[i];
+            final center = tile.getCenter();
+            totalLat += center.latitude;
+            totalLng += center.longitude;
+            count++;
+          }
+          break;
+        }
+      }
+
+      if (count > 0) {
+        final centerLat = totalLat / count;
+        final centerLng = totalLng / count;
+
+        debugPrint('🗺️ Calculated tile center: lat=$centerLat, lng=$centerLng');
+
+        // If center is at 0,0 (null island), use fallback coordinates
+        final targetLat = centerLat == 0.0 ? _initialPosition.latitude : centerLat;
+        final targetLng = centerLng == 0.0 ? _initialPosition.longitude : centerLng;
+
+        debugPrint('🗺️ Target center: lat=$targetLat, lng=$targetLng');
+        debugPrint('🗺️ Fallback position: lat=${_initialPosition.latitude}, lng=${_initialPosition.longitude}');
+
+        // Center the map on the tile data
+        final cameraOptions = mb.CameraOptions(
+          center: mb.Point(
+            coordinates: mb.Position(targetLng, targetLat),
+          ),
+          zoom: _initialZoom,
+          pitch: 45.0,
+        );
+
+        await _mapboxMap.setCamera(cameraOptions);
+        debugPrint('🗺️ Map centered on tile data successfully');
+      } else {
+        debugPrint('⚠️ No tiles to center on');
       }
     } catch (e) {
-      debugPrint('Error initializing annotation managers: $e');
+      debugPrint('❌ Error centering map on tiles: $e');
     }
   }
 
-  Future<void> _addCurrentLocationMarker(Position position) async {
-    if (_pointAnnotationManager == null) return;
-
-    try {
-      final markerOptions = mb.PointAnnotationOptions(
-        geometry: mb.Point(
-          coordinates: mb.Position(position.longitude, position.latitude),
-        ),
-        iconSize: 1.5,
-      );
-
-      final annotation = await _pointAnnotationManager!.create(markerOptions);
-      _markers.add(annotation);
-    } catch (e) {
-      debugPrint('Error adding current location marker: $e');
-    }
-  }
-
-  Future<void> _addMapMarker(LatLng latLng) async {
-    if (_pointAnnotationManager == null) return;
-
-    try {
-      final markerOptions = mb.PointAnnotationOptions(
-        geometry: mb.Point(
-          coordinates: mb.Position(latLng.longitude, latLng.latitude),
-        ),
-        iconSize: 1.5,
-      );
-
-      final annotation = await _pointAnnotationManager!.create(markerOptions);
-      _markers.add(annotation);
-    } catch (e) {
-      debugPrint('Error adding map marker: $e');
-    }
-  }
-
-  void _showLocationError(String message) {
-    setState(() => _isLoading = false);
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        action: SnackBarAction(
-          label: 'Settings',
-          textColor: Colors.white,
-          onPressed: () => _showPermissionDialog(),
-        ),
-      ),
-    );
-  }
-
-void _showPermissionDialog() {
-    showDialog(
-      context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: const Text('Location Permission Required'),
-          content: const Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'To enable location access in iOS Simulator:',
-                style: TextStyle(fontWeight: FontWeight.bold),
-              ),
-              SizedBox(height: 12),
-              Text('1. Go to iOS Simulator Settings app'),
-              Text('2. Tap "Privacy & Security"'),
-              Text('3. Tap "Location Services"'),
-              Text('4. Enable Location Services'),
-              Text('5. Find "Pix2Land" and set to "While Using"'),
-              SizedBox(height: 12),
-              Text(
-                'Or continue with default location (UGM Campus)',
-                style: TextStyle(fontStyle: FontStyle.italic),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () {
-                Navigator.of(context).pop();
-                _openAppSettings();
-              },
-              child: const Text('Open Settings'),
-            ),
-            TextButton(
-              onPressed: () {
-                Navigator.of(context).pop();
-              },
-              child: const Text('Use Default Location'),
-            ),
-          ],
-        );
+  // Helper method to convert tiles to GeoJSON
+  Map<String, dynamic> _tilesToGeoJson() {
+    final features = _tiles.map((tile) => {
+      'type': 'Feature',
+      'geometry': {
+        'type': 'Polygon',
+        'coordinates': tile.coordinates,
       },
-    );
+      'properties': {
+        'id': tile.id,
+        ...tile.properties,
+        'isSaved': tile.isSaved,
+      }
+    }).toList();
+
+    return {
+      'type': 'FeatureCollection',
+      'features': features,
+    };
   }
 
-  Future<void> _openAppSettings() async {
-    await openAppSettings();
-  }
+  void _checkTileSelection(LatLng point) {
+    debugPrint('🗺️ Checking tile selection at: ${point.latitude}, ${point.longitude}');
 
-  void _onMapTapped(mb.ScreenCoordinate coordinate) {
-    // For now, just add a marker at the current position
-    if (_currentPosition != null) {
-      final latLng = LatLng(_currentPosition!.latitude, _currentPosition!.longitude);
-      _addMapMarker(latLng);
-      _showCoordinateInfo(latLng);
+    // Check if we have raw GeoJSON data to use for more accurate selection
+    if (_rawTilesGeoJson.isNotEmpty) {
+      final features = _rawTilesGeoJson['features'] as List<dynamic>;
+      for (final feature in features) {
+        if (_isPointInGeoJSONFeature(point, feature)) {
+          // Find the corresponding tile object
+          final tileId = feature['properties']['id'] as int;
+          final tile = _tiles.firstWhere(
+            (t) => t.id == tileId,
+            orElse: () => MapTile(
+              id: tileId,
+              coordinates: [],
+              properties: feature['properties'] as Map<String, dynamic>? ?? {},
+            ),
+          );
+
+          setState(() {
+            _selectedTile = tile;
+          });
+          debugPrint('🗺️ Selected tile ID: ${tile.id}');
+          _showTileInfo(tile);
+          return;
+        }
+      }
+    } else {
+      // Fallback to using parsed tile data
+      for (final tile in _tiles) {
+        final bounds = tile.getBounds();
+        if (_isPointInBounds(point, bounds)) {
+          setState(() {
+            _selectedTile = tile;
+          });
+          _showTileInfo(tile);
+          break;
+        }
+      }
     }
-}
 
-  void _showCoordinateInfo(LatLng latLng) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          'Lat: ${latLng.latitude.toStringAsFixed(6)}\nLng: ${latLng.longitude.toStringAsFixed(6)}',
-        ),
-        duration: const Duration(seconds: 2),
-      ),
-    );
+    debugPrint('🗺️ No tile selected at this position');
   }
 
-  bool _isPointInBounds(LatLng point, MapSectionBounds bounds) {
+  // Check if a point is within a GeoJSON polygon feature
+  bool _isPointInGeoJSONFeature(LatLng point, dynamic feature) {
+    try {
+      final geometry = feature['geometry'];
+      if (geometry['type'] == 'Polygon') {
+        final coordinates = geometry['coordinates'] as List<dynamic>;
+        if (coordinates.isNotEmpty) {
+          final ring = coordinates[0] as List<dynamic>;
+          return _isPointInPolygonRing(point, ring);
+        }
+      }
+    } catch (e) {
+      debugPrint('❌ Error checking GeoJSON feature: $e');
+    }
+    return false;
+  }
+
+  // Check if a point is within a polygon ring
+  bool _isPointInPolygonRing(LatLng point, List<dynamic> ring) {
+    try {
+      // Convert point to screen coordinates for testing
+      final x = point.longitude;
+      final y = point.latitude;
+
+      bool inside = false;
+      int n = ring.length;
+
+      for (int i = 0, j = n - 1; i < n; j = i++) {
+        final xi = (ring[i][0] as num).toDouble();
+        final yi = (ring[i][1] as num).toDouble();
+        final xj = (ring[j][0] as num).toDouble();
+        final yj = (ring[j][1] as num).toDouble();
+
+        if (((yi > y) != (yj > y)) && (x < (xj - xi) * (y - yi) / (yj - yi) + xi)) {
+          inside = !inside;
+        }
+      }
+
+      return inside;
+    } catch (e) {
+      debugPrint('❌ Error in point-in-polygon calculation: $e');
+      return false;
+    }
+  }
+
+  bool _isPointInBounds(LatLng point, LatLngBounds bounds) {
     return point.latitude >= bounds.south &&
            point.latitude <= bounds.north &&
            point.longitude >= bounds.west &&
            point.longitude <= bounds.east;
+  }
+
+  Future<void> _addTilesLayer() async {
+    try {
+      debugPrint('🗺️ Adding tiles layer using raw GeoJSON data...');
+
+      if (_rawTilesGeoJson.isEmpty) {
+        debugPrint('❌ No raw GeoJSON data available');
+        return;
+      }
+
+      debugPrint('🗺️ Using raw GeoJSON with ${_rawTilesGeoJson['features'].length} tiles');
+
+      // Add source for tiles using raw GeoJSON data (bypasses coordinate parsing bug)
+      final tileSource = mb.GeoJsonSource(
+        id: "tiles-source",
+        data: jsonEncode(_rawTilesGeoJson),
+      );
+      debugPrint('🗺️ Adding raw GeoJSON source...');
+      await _mapboxMap.style.addSource(tileSource);
+      debugPrint('🗺️ Raw GeoJSON source added successfully');
+
+      // Add outline layer for better contrast
+      final tileOutlineLayer = mb.LineLayer(
+        id: "tiles-outline-layer",
+        sourceId: "tiles-source",
+        lineOpacity: 1.0,
+        lineColor: Colors.black.value,
+        lineWidth: 3.0, // Thick black outline for maximum contrast
+      );
+      debugPrint('🗺️ Adding outline layer for contrast...');
+      await _mapboxMap.style.addLayer(tileOutlineLayer);
+      debugPrint('🗺️ Outline layer added successfully');
+
+      // Add layer for tiles using FillLayer with high visibility for testing
+      final tileLayer = mb.FillLayer(
+        id: "tiles-layer",
+        sourceId: "tiles-source",
+        fillOpacity: 0.8, // Make tiles very visible
+        fillColor: Colors.red.value, // Use bright red color for high contrast
+        // Remove outline to simplify
+      );
+      debugPrint('🗺️ Adding fill layer with high visibility...');
+      await _mapboxMap.style.addLayer(tileLayer);
+      debugPrint('🗺️ Fill layer added successfully');
+
+      // TODO: Implement click listener for tile selection
+      // Click functionality requires proper Mapbox Mapbox Maps Flutter SDK implementation
+      debugPrint('🗺️ TODO: Add tile click listener');
+
+      debugPrint('✅ Tiles layer added successfully using raw GeoJSON data!');
+    } catch (e) {
+      debugPrint('❌ Error adding tiles layer: $e');
+      debugPrint('❌ Stack trace: ${StackTrace.current}');
+    }
+  }
+
+  Future<void> _addCurrentLocationMarker() async {
+    // TODO: Implement point annotation for current location marker
+    // For now, we'll skip this as it's not essential for the tiles display
+    if (_currentPosition != null) {
+      debugPrint('📍 Current location: ${_currentPosition!.latitude}, ${_currentPosition!.longitude}');
+    }
+  }
+
+  void _clearSelection() {
+    setState(() {
+      _selectedTile = null;
+    });
+  }
+
+  void _showTileInfo(MapTile tile) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => _TileInfoSheet(
+        tile: tile,
+        onSave: () => _saveTile(tile),
+      ),
+    );
+  }
+
+  void _saveTile(MapTile tile) {
+    // TODO: Implement save functionality
+    setState(() {
+      tile.isSaved = true;
+    });
+    Navigator.pop(context);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Tile ${tile.id} saved successfully!')),
+    );
   }
 
   void _toggleMapType() {
@@ -374,8 +497,19 @@ void _showPermissionDialog() {
     setState(() {
       _currentStyle = nextStyle;
     });
+  }
 
-    // Style switching will recreate the map widget with new style
+  Future<void> _toggleTiles() async {
+    setState(() {
+      _showTiles = !_showTiles;
+    });
+
+    try {
+      // For now, just log the toggle - we'll implement visibility after getting basic layer working
+      debugPrint('🗺️ Tiles visibility toggled to: $_showTiles');
+    } catch (e) {
+      debugPrint('❌ Error toggling tiles layer: $e');
+    }
   }
 
   String _getStyleUri() {
@@ -390,159 +524,48 @@ void _showPermissionDialog() {
         return MapboxConfig.darkStyle;
       case 'custom':
       default:
-        return MapboxConfig.styleUrl;
+        // Use light-v11 style like the working JavaScript example
+        return 'mapbox://styles/mapbox/light-v11';
     }
-  }
-
-  String _getMapTypeName() {
-    switch (_currentStyle) {
-      case 'satellite':
-        return 'Satellite';
-      case 'street':
-        return 'Street';
-      case 'light':
-        return 'Light';
-      case 'dark':
-        return 'Dark';
-      case 'custom':
-      default:
-        return 'Custom';
-    }
-  }
-
-  IconData _getMapTypeIcon() {
-    switch (_currentStyle) {
-      case 'satellite':
-        return Icons.satellite;
-      case 'street':
-        return Icons.map;
-      case 'light':
-        return Icons.light_mode;
-      case 'dark':
-        return Icons.dark_mode;
-      case 'custom':
-      default:
-        return Icons.layers;
-    }
-  }
-
-  void _clearMarkers() async {
-    if (_pointAnnotationManager != null) {
-      try {
-        // Clear all annotations
-        await _pointAnnotationManager!.deleteAll();
-        _markers.clear();
-
-        // Re-add current location marker if available
-        if (_currentPosition != null) {
-          await _addCurrentLocationMarker(_currentPosition!);
-        }
-      } catch (e) {
-        debugPrint('Error clearing markers: $e');
-      }
-    }
-  }
-
-  void _selectSection(MapSection section) {
-    setState(() {
-      _selectedSection = section;
-    });
-    _showSectionInfo(section);
-  }
-
-  void _showSectionInfo(MapSection section) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) => _SectionInfoSheet(
-        section: section,
-        onDownload: () => _downloadSection(section),
-      ),
-    );
-  }
-
-  void _downloadSection(MapSection section) {
-    Navigator.pop(context);
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Downloading ${section.name}...'),
-        action: SnackBarAction(
-          label: 'View',
-          onPressed: () {
-            // Navigate to downloads
-          },
-        ),
-      ),
-    );
-    // TODO: Implement actual download logic
-  }
-
-  void _toggleSectionsVisibility() {
-    setState(() {
-      _showSections = !_showSections;
-    });
-  }
-
-  List<Polygon> _buildSectionPolygons() {
-    if (!_showSections) return [];
-
-    return _sections.map((section) {
-      final isSelected = _selectedSection?.id == section.id;
-      return Polygon(
-        points: [
-          LatLng(section.bounds.south, section.bounds.west),
-          LatLng(section.bounds.north, section.bounds.west),
-          LatLng(section.bounds.north, section.bounds.east),
-          LatLng(section.bounds.south, section.bounds.east),
-        ],
-        color: isSelected
-            ? AppTheme.primaryColor.withOpacity(0.3)
-            : Colors.blue.withOpacity(0.15),
-        borderColor: isSelected ? AppTheme.primaryColor : Colors.blue,
-        borderStrokeWidth: isSelected ? 3 : 2,
-        isFilled: true,
-      );
-    }).toList();
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Geodetic Maps'),
+        title: const Text('Interactive Map'),
         automaticallyImplyLeading: false,
         actions: [
           IconButton(
-            icon: Icon(_showSections ? Icons.layers : Icons.layers_outlined),
-            onPressed: _toggleSectionsVisibility,
-            tooltip: _showSections ? 'Hide Sections' : 'Show Sections',
+            icon: Icon(_showTiles ? Icons.grid_on : Icons.grid_off),
+            onPressed: _toggleTiles,
+            tooltip: _showTiles ? 'Hide Tiles' : 'Show Tiles',
           ),
           IconButton(
-            icon: Icon(_getMapTypeIcon()),
+            icon: const Icon(Icons.layers),
             onPressed: _toggleMapType,
-            tooltip: 'Map: ${_getMapTypeName()}',
+            tooltip: 'Change Map Style',
           ),
           IconButton(
             icon: const Icon(Icons.clear_all),
-            onPressed: _clearMarkers,
-            tooltip: 'Clear Markers',
+            onPressed: _clearSelection,
+            tooltip: 'Clear Selection',
           ),
           IconButton(
-            icon: const Icon(Icons.my_location),
-            onPressed: _getCurrentLocation,
-            tooltip: 'Current Location',
+            icon: const Icon(Icons.refresh),
+            onPressed: _loadTilesOnly,
+            tooltip: 'Refresh Data',
           ),
         ],
       ),
-      body: _isLoading
+      body: _isLoading || _isLoadingTiles
           ? const Center(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   CircularProgressIndicator(),
                   SizedBox(height: 16),
-                  Text('Loading map...'),
+                  Text('Loading map data...'),
                 ],
               ),
             )
@@ -552,14 +575,85 @@ void _showPermissionDialog() {
                   key: ValueKey('mapbox_map_$_currentStyle'),
                   onMapCreated: _onMapCreated,
                   styleUri: _getStyleUri(),
+                  onTapListener: (context) {
+                    final point = context.point;
+                    debugPrint('🗺️ Map clicked at: ${point.coordinates.lat}, ${point.coordinates.lng}');
+                    _checkTileSelection(LatLng(point.coordinates.lat.toDouble(), point.coordinates.lng.toDouble()));
+                  },
                   cameraOptions: mb.CameraOptions(
                     center: mb.Point(
                       coordinates: mb.Position(
-                        _currentPosition?.longitude ?? _initialPosition.longitude,
-                        _currentPosition?.latitude ?? _initialPosition.latitude,
+                        _initialPosition.longitude,
+                        _initialPosition.latitude,
                       ),
                     ),
-                  zoom: _currentZoom,
+                    zoom: _initialZoom,
+                    pitch: 45.0,
+                  ),
+                ),
+
+                // Loading indicator for tiles
+                if (_isLoadingTiles)
+                  Positioned(
+                    top: 10,
+                    left: 10,
+                    child: Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withOpacity(0.7),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: const Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                            ),
+                          ),
+                          SizedBox(width: 8),
+                          Text('Loading tiles...', style: TextStyle(color: Colors.white)),
+                        ],
+                      ),
+                    ),
+                  ),
+
+                // Instructions
+                Positioned(
+                  bottom: 20,
+                  left: 20,
+                  child: Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.black.withOpacity(0.7),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Text(
+                          'Maps Screen:',
+                          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          '• Displaying ${_tiles.length} tiles from backend API',
+                          style: TextStyle(color: Colors.white, fontSize: 12),
+                        ),
+                        Text(
+                          '• Toggle tiles visibility with grid icon',
+                          style: TextStyle(color: Colors.white, fontSize: 12),
+                        ),
+                        Text(
+                          '• Change map style with layers icon',
+                          style: TextStyle(color: Colors.white, fontSize: 12),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ],
@@ -568,23 +662,23 @@ void _showPermissionDialog() {
   }
 }
 
-// Section Information Bottom Sheet Widget
-class _SectionInfoSheet extends StatelessWidget {
-  final MapSection section;
-  final VoidCallback onDownload;
+// Tile Information Modal Widget
+class _TileInfoSheet extends StatelessWidget {
+  final MapTile tile;
+  final VoidCallback onSave;
 
-  const _SectionInfoSheet({
-    required this.section,
-    required this.onDownload,
+  const _TileInfoSheet({
+    required this.tile,
+    required this.onSave,
   });
 
   @override
   Widget build(BuildContext context) {
     return Container(
       margin: const EdgeInsets.all(16),
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.all(Radius.circular(16)),
+        borderRadius: BorderRadius.circular(16),
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -601,7 +695,7 @@ class _SectionInfoSheet extends StatelessWidget {
           ),
           const SizedBox(height: 16),
 
-          // Section Title
+          // Tile Title
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 20),
             child: Row(
@@ -613,7 +707,7 @@ class _SectionInfoSheet extends StatelessWidget {
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: const Icon(
-                    Icons.map,
+                    Icons.grid_on,
                     color: AppTheme.primaryColor,
                     size: 24,
                   ),
@@ -624,61 +718,22 @@ class _SectionInfoSheet extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        section.name,
+                        'Tile #${tile.id}',
                         style: const TextStyle(
                           fontSize: 20,
                           fontWeight: FontWeight.bold,
                         ),
                       ),
                       Text(
-                        section.category.toUpperCase(),
+                        tile.isSaved ? 'Saved' : 'Available',
                         style: TextStyle(
                           fontSize: 12,
-                          color: Colors.grey[600],
+                          color: tile.isSaved ? Colors.green : Colors.grey[600],
                           fontWeight: FontWeight.w500,
                         ),
                       ),
                     ],
                   ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 20),
-
-          // Section Details
-          Container(
-            margin: const EdgeInsets.symmetric(horizontal: 20),
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: Colors.grey[100],
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _InfoRow(
-                  icon: Icons.description,
-                  label: 'Description',
-                  value: section.description,
-                ),
-                const SizedBox(height: 12),
-                _InfoRow(
-                  icon: Icons.area_chart,
-                  label: 'Area',
-                  value: section.formattedArea,
-                ),
-                const SizedBox(height: 12),
-                _InfoRow(
-                  icon: Icons.layers,
-                  label: 'Layers',
-                  value: section.layers.join(', '),
-                ),
-                const SizedBox(height: 12),
-                _InfoRow(
-                  icon: Icons.update,
-                  label: 'Last Updated',
-                  value: _formatDate(section.lastUpdated),
                 ),
               ],
             ),
@@ -707,17 +762,15 @@ class _SectionInfoSheet extends StatelessWidget {
                 Expanded(
                   flex: 2,
                   child: ElevatedButton.icon(
-                    onPressed: section.isDownloaded ? null : onDownload,
+                    onPressed: tile.isSaved ? null : onSave,
                     icon: Icon(
-                      section.isDownloaded ? Icons.check_circle : Icons.download,
+                      tile.isSaved ? Icons.check_circle : Icons.save,
                     ),
                     label: Text(
-                      section.isDownloaded ? 'Downloaded' : 'Download Section',
+                      tile.isSaved ? 'Saved' : 'Save Tile',
                     ),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: section.isDownloaded
-                          ? Colors.grey
-                          : AppTheme.primaryColor,
+                      backgroundColor: tile.isSaved ? Colors.grey : AppTheme.primaryColor,
                       foregroundColor: Colors.white,
                       padding: const EdgeInsets.symmetric(vertical: 14),
                     ),
@@ -731,22 +784,8 @@ class _SectionInfoSheet extends StatelessWidget {
       ),
     );
   }
-
-  String _formatDate(DateTime date) {
-    final now = DateTime.now();
-    final difference = now.difference(date);
-
-    if (difference.inDays == 0) {
-      return 'Today';
-    } else if (difference.inDays == 1) {
-      return 'Yesterday';
-    } else if (difference.inDays < 7) {
-      return '${difference.inDays} days ago';
-    } else {
-      return '${date.day}/${date.month}/${date.year}';
-    }
-  }
 }
+
 
 // Info Row Widget
 class _InfoRow extends StatelessWidget {

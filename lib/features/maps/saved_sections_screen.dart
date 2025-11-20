@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_map/flutter_map.dart';
+import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart' as mb;
 import 'package:latlong2/latlong.dart';
 import '../../core/models/map_section.dart';
 import '../../core/theme/app_theme.dart';
+import '../../core/config/app_config.dart';
 
 class SavedSectionsScreen extends StatefulWidget {
   const SavedSectionsScreen({super.key});
@@ -300,36 +301,17 @@ class _SectionPreviewScreen extends StatelessWidget {
       ),
       body: Column(
         children: [
-          // Map Preview
+          // Map Preview using Mapbox
           Expanded(
             flex: 2,
-            child: FlutterMap(
-              options: MapOptions(
-                initialCenter: section.center,
-                initialZoom: 15.0,
+            child: mb.MapWidget(
+              styleUri: MapboxConfig.styleUrl,
+              cameraOptions: mb.CameraOptions(
+                center: mb.Point(
+                  coordinates: mb.Position(section.center.longitude, section.center.latitude),
+                ),
+                zoom: 15.0,
               ),
-              children: [
-                TileLayer(
-                  urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                  userAgentPackageName: 'com.kedaireka.app',
-                ),
-                PolygonLayer(
-                  polygons: [
-                    Polygon(
-                      points: [
-                        LatLng(section.bounds.south, section.bounds.west),
-                        LatLng(section.bounds.north, section.bounds.west),
-                        LatLng(section.bounds.north, section.bounds.east),
-                        LatLng(section.bounds.south, section.bounds.east),
-                      ],
-                      color: AppTheme.primaryColor.withOpacity(0.3),
-                      borderColor: AppTheme.primaryColor,
-                      borderStrokeWidth: 3,
-                      isFilled: true,
-                    ),
-                  ],
-                ),
-              ],
             ),
           ),
 

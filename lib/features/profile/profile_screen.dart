@@ -6,6 +6,58 @@ import '../../core/theme/app_theme.dart';
 import '../auth/bloc/auth_bloc.dart';
 import '../auth/bloc/auth_event.dart';
 import '../auth/bloc/auth_state.dart';
+import '../../core/services/map_tiles_service.dart';
+
+// Helper widget for info rows to avoid scoping issues
+class _InfoRow extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String value;
+
+  const _InfoRow({
+    required this.icon,
+    required this.label,
+    required this.value,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 80,
+            child: Row(
+              children: [
+                Icon(icon, size: 16, color: Colors.grey[600]),
+                const SizedBox(width: 8),
+                Text(
+                  '$label:',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w600,
+                    color: Colors.grey[600],
+                    fontSize: 14,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Expanded(
+            child: Text(
+              value,
+              style: const TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
 
 class ProfileScreen extends StatelessWidget {
   const ProfileScreen({super.key});
@@ -31,6 +83,7 @@ class ProfileScreen extends StatelessWidget {
         builder: (context, state) {
           if (state is AuthAuthenticated) {
             return SingleChildScrollView(
+              padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
               child: Column(
                 children: [
                   // Profile Header
@@ -121,20 +174,23 @@ class ProfileScreen extends StatelessWidget {
                           color: AppTheme.primaryColor,
                         ),
                         _StatCard(
-                          icon: Icons.map,
-                          label: 'Sections',
-                          value: '2',
+                          icon: Icons.grid_on,
+                          label: 'Tiles Saved',
+                          value: '8',
                           color: AppTheme.accentColor,
                         ),
                         _StatCard(
-                          icon: Icons.terrain,
-                          label: 'Area',
-                          value: '5.2 ha',
+                          icon: Icons.location_city,
+                          label: 'Buildings',
+                          value: '15',
                           color: AppTheme.successColor,
                         ),
                       ],
                     ),
                   ),
+
+                  // Saved Items Section
+                  const SavedItemsSection(),
 
                   // Profile Options
                   Container(
@@ -372,6 +428,747 @@ class _ProfileOption extends StatelessWidget {
       title: Text(title),
       trailing: const Icon(Icons.chevron_right, color: Colors.grey),
       onTap: onTap,
+    );
+  }
+}
+
+// Saved Items Section Widget
+class SavedItemsSection extends StatefulWidget {
+  const SavedItemsSection({super.key});
+
+  @override
+  State<SavedItemsSection> createState() => _SavedItemsSectionState();
+}
+
+class _SavedItemsSectionState extends State<SavedItemsSection> {
+  List<MapTile> _savedTiles = [];
+  List<Building> _savedBuildings = [];
+  bool _isLoading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadSavedItems();
+  }
+
+  // Show tile preview modal
+  void _showTilePreview(BuildContext context, MapTile tile) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => Container(
+        margin: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Handle bar
+            Container(
+              margin: const EdgeInsets.only(top: 12),
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Colors.grey[300],
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            // Tile Title
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: AppTheme.primaryColor.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Icon(
+                      Icons.grid_on,
+                      color: AppTheme.primaryColor,
+                      size: 24,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Tile #${tile.id}',
+                          style: const TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        Text(
+                          'Saved Tile',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.green[600],
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 20),
+
+            // Tile Details
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Location Details',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  _InfoRow(
+                    icon: Icons.location_on,
+                    label: 'Latitude',
+                    value: tile.getCenter().latitude.toStringAsFixed(6),
+                  ),
+                  const SizedBox(height: 4),
+                  _InfoRow(
+                    icon: Icons.location_on,
+                    label: 'Longitude',
+                    value: tile.getCenter().longitude.toStringAsFixed(6),
+                  ),
+                  const SizedBox(height: 16),
+                  const Text(
+                    'Tile Properties',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  if (tile.properties.isNotEmpty)
+                    ...tile.properties.entries.take(3).map((entry) => Padding(
+                      padding: const EdgeInsets.only(bottom: 4),
+                      child: _InfoRow(
+                        icon: Icons.info_outline,
+                        label: entry.key,
+                        value: entry.value?.toString() ?? 'N/A',
+                      ),
+                    ))
+                  else
+                    const _InfoRow(
+                      icon: Icons.info_outline,
+                      label: 'Properties',
+                      value: 'No additional properties',
+                    ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 20),
+
+            // Action Buttons
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: () => Navigator.pop(context),
+                      icon: const Icon(Icons.close),
+                      label: const Text('Close'),
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        side: const BorderSide(color: Colors.grey),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    flex: 2,
+                    child: ElevatedButton.icon(
+                      onPressed: () {
+                        Navigator.pop(context);
+                        // Navigate to map with this tile selected
+                        context.go('/maps?tileId=${tile.id}');
+                      },
+                      icon: const Icon(Icons.map),
+                      label: const Text('View on Map'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppTheme.primaryColor,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 20),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // Show building preview modal
+  void _showBuildingPreview(BuildContext context, Building building) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => Container(
+        margin: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Handle bar
+            Container(
+              margin: const EdgeInsets.only(top: 12),
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Colors.grey[300],
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            // Building Title
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: AppTheme.accentColor.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Icon(
+                      Icons.location_city,
+                      color: AppTheme.accentColor,
+                      size: 24,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Building #${building.id}',
+                          style: const TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        Text(
+                          'Saved Building',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.green[600],
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 20),
+
+            // Building Details
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Financial Information',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  _InfoRow(
+                    icon: Icons.attach_money,
+                    label: 'NJOP Value',
+                    value: building.formattedNjop,
+                  ),
+                  const SizedBox(height: 16),
+                  const Text(
+                    'Hazard Assessment',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  _InfoRow(
+                    icon: Icons.local_fire_department,
+                    label: 'Fire Hazard',
+                    value: building.fireHazard?.toStringAsFixed(2) ?? 'N/A',
+                  ),
+                  const SizedBox(height: 4),
+                  _InfoRow(
+                    icon: Icons.flood,
+                    label: 'Flood Hazard',
+                    value: building.floodHazard?.toStringAsFixed(2) ?? 'N/A',
+                  ),
+                  const SizedBox(height: 4),
+                  _InfoRow(
+                    icon: Icons.warning,
+                    label: 'Total Hazard',
+                    value: building.hazardSum?.toStringAsFixed(2) ?? 'N/A',
+                  ),
+                  const SizedBox(height: 16),
+                  const Text(
+                    'Location Details',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  _InfoRow(
+                    icon: Icons.location_on,
+                    label: 'Latitude',
+                    value: building.getCenter().latitude.toStringAsFixed(6),
+                  ),
+                  const SizedBox(height: 4),
+                  _InfoRow(
+                    icon: Icons.location_on,
+                    label: 'Longitude',
+                    value: building.getCenter().longitude.toStringAsFixed(6),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 20),
+
+            // Action Buttons
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: () => Navigator.pop(context),
+                      icon: const Icon(Icons.close),
+                      label: const Text('Close'),
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        side: const BorderSide(color: Colors.grey),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    flex: 2,
+                    child: ElevatedButton.icon(
+                      onPressed: () {
+                        Navigator.pop(context);
+                        // Navigate to AR with this building
+                        context.go('/ar?buildingId=${building.id}');
+                      },
+                      icon: const Icon(Icons.view_in_ar),
+                      label: const Text('View in AR'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppTheme.accentColor,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 20),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _loadSavedItems() async {
+    setState(() => _isLoading = true);
+    try {
+      // Get actual tiles and buildings, then filter for saved ones
+      final results = await Future.wait([
+        MapTilesService().getTiles(),
+        MapTilesService().getBuildings(),
+      ]);
+      final tiles = results[0] as List<MapTile>;
+      final buildings = results[1] as List<Building>;
+
+      setState(() {
+        // Filter to show only tiles that are actually saved
+        _savedTiles = tiles.where((tile) => tile.isSaved).toList();
+        // Filter to show only buildings that are actually saved
+        _savedBuildings = buildings.where((building) => building.isSaved).toList();
+        _isLoading = false;
+      });
+    } catch (e) {
+      setState(() => _isLoading = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_isLoading) {
+      return const Padding(
+        padding: EdgeInsets.all(16),
+        child: Row(
+          children: [
+            CircularProgressIndicator(),
+            SizedBox(width: 16),
+            Text('Loading saved items...'),
+          ],
+        ),
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Section Header
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          child: Row(
+            children: [
+              const Icon(
+                Icons.bookmark,
+                color: AppTheme.primaryColor,
+              ),
+              const SizedBox(width: 8),
+              const Text(
+                'Saved Items',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const Spacer(),
+              TextButton(
+                onPressed: () {
+                  // TODO: Navigate to full saved items page
+                },
+                child: const Text('View All'),
+              ),
+            ],
+          ),
+        ),
+
+        // Saved Tiles Preview
+        if (_savedTiles.isNotEmpty) ...[
+          const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 16),
+            child: Text(
+              'Saved Tiles',
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: Colors.grey,
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+          SizedBox(
+            height: 120,
+            child: ListView.builder(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              scrollDirection: Axis.horizontal,
+              itemCount: _savedTiles.length,
+              itemBuilder: (context, index) {
+                final tile = _savedTiles[index];
+                return Container(
+                  width: 140,
+                  margin: const EdgeInsets.only(right: 12),
+                  child: _SavedTileCard(
+                    tile: tile,
+                    onTap: () => _showTilePreview(context, tile),
+                  ),
+                );
+              },
+            ),
+          ),
+          const SizedBox(height: 16),
+        ],
+
+        // Saved Buildings Preview
+        if (_savedBuildings.isNotEmpty) ...[
+          const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 16),
+            child: Text(
+              'Saved Buildings',
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: Colors.grey,
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+          SizedBox(
+            height: 120,
+            child: ListView.builder(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              scrollDirection: Axis.horizontal,
+              itemCount: _savedBuildings.length,
+              itemBuilder: (context, index) {
+                final building = _savedBuildings[index];
+                return Container(
+                  width: 140,
+                  margin: const EdgeInsets.only(right: 12),
+                  child: _SavedBuildingCard(
+                    building: building,
+                    onTap: () => _showBuildingPreview(context, building),
+                  ),
+                );
+              },
+            ),
+          ),
+          const SizedBox(height: 16),
+        ],
+
+        if (_savedTiles.isEmpty && _savedBuildings.isEmpty)
+          Container(
+            margin: const EdgeInsets.symmetric(horizontal: 16),
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              color: Colors.grey[100],
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Column(
+              children: [
+                Icon(
+                  Icons.bookmark_border,
+                  size: 48,
+                  color: Colors.grey[400],
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  'No saved items yet',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.grey[600],
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Start exploring and save tiles and buildings from the map',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.grey[500],
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 16),
+                ElevatedButton.icon(
+                  onPressed: () {
+                    // Navigate to maps
+                    context.go('/maps');
+                  },
+                  icon: const Icon(Icons.map),
+                  label: const Text('Explore Map'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppTheme.primaryColor,
+                    foregroundColor: Colors.white,
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+        const SizedBox(height: 8),
+      ],
+    );
+  }
+}
+
+// Saved Tile Card Widget
+class _SavedTileCard extends StatelessWidget {
+  final MapTile tile;
+  final VoidCallback onTap;
+
+  const _SavedTileCard({required this.tile, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      elevation: 2,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Tile Icon
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: AppTheme.primaryColor.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(
+                  Icons.grid_on,
+                  color: AppTheme.primaryColor,
+                  size: 20,
+                ),
+              ),
+              const SizedBox(height: 8),
+              // Tile Info
+              Text(
+                'Tile #${tile.id}',
+                style: const TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 12,
+                ),
+                overflow: TextOverflow.ellipsis,
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'Center: ${tile.getCenter().latitude.toStringAsFixed(4)}, ${tile.getCenter().longitude.toStringAsFixed(4)}',
+                style: TextStyle(
+                  fontSize: 10,
+                  color: Colors.grey[600],
+                ),
+                overflow: TextOverflow.ellipsis,
+                maxLines: 2,
+              ),
+              const Spacer(),
+              // Saved Badge
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: Colors.green,
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: const Text(
+                  'Saved',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 9,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// Saved Building Card Widget
+class _SavedBuildingCard extends StatelessWidget {
+  final Building building;
+  final VoidCallback onTap;
+
+  const _SavedBuildingCard({required this.building, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      elevation: 2,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Building Icon
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: AppTheme.accentColor.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(
+                  Icons.location_city,
+                  color: AppTheme.accentColor,
+                  size: 20,
+                ),
+              ),
+              const SizedBox(height: 8),
+              // Building Info
+              Text(
+                'Building #${building.id}',
+                style: const TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 12,
+                ),
+                overflow: TextOverflow.ellipsis,
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'NJOP: ${building.formattedNjop}',
+                style: TextStyle(
+                  fontSize: 10,
+                  color: Colors.grey[600],
+                  fontWeight: FontWeight.w600,
+                ),
+                overflow: TextOverflow.ellipsis,
+              ),
+              const SizedBox(height: 2),
+              Text(
+                'Fire: ${building.fireHazard?.toStringAsFixed(2) ?? 'N/A'}',
+                style: const TextStyle(
+                  fontSize: 10,
+                  color: Colors.orange,
+                ),
+                overflow: TextOverflow.ellipsis,
+              ),
+              const Spacer(),
+              // Saved Badge
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: Colors.green,
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: const Text(
+                  'Saved',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 9,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

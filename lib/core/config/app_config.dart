@@ -1,7 +1,7 @@
 class AppConfig {
   static const String _baseUrl = String.fromEnvironment(
     'API_BASE_URL',
-    defaultValue: 'http://localhost:3000/api/v1',
+    defaultValue: 'https://pix2land-backend.vercel.app/api/v1',
   );
 
   static String get baseUrl => _baseUrl;
@@ -25,7 +25,7 @@ class MapboxConfig {
 class AuthEndpoints {
   static const String _baseUrl = String.fromEnvironment(
     'API_BASE_URL',
-    defaultValue: 'http://localhost:3000/api/v1',
+    defaultValue: 'https://pix2land-backend.vercel.app/api/v1',
   );
 
   static const String baseUrl = _baseUrl;

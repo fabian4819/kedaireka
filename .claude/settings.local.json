@@ -33,7 +33,13 @@
       "Bash(git pull:*)",
       "Bash(git stash:*)",
       "Bash(git add:*)",
-      "Bash(git commit:*)"
+      "Bash(git commit:*)",
+      "Bash(curl:*)",
+      "Bash(nc:*)",
+      "Bash(pkill:*)",
+      "Bash(git checkout:*)",
+      "WebSearch",
+      "WebFetch(domain:pub.dev)"
     ],
     "deny": [],
     "ask": []
