@@ -27,7 +27,10 @@
       "Bash(export JAVA_HOME=/opt/homebrew/opt/openjdk@17:*)",
       "Bash(export PATH=\"/opt/homebrew/opt/openjdk@17/bin:$PATH\":*)",
       "Bash(rm:*)",
-      "Bash(pod cache clean:*)"
+      "Bash(pod cache clean:*)",
+      "Bash(git pull:*)",
+      "Bash(git stash:*)",
+      "Bash(git add:*)"
     ],
     "deny": [],
     "ask": []
