@@ -11,7 +11,7 @@ class AppConstants {
   static const String mapsRoute = '/maps';
   static const String arRoute = '/ar';
   static const String videocallRoute = '/videocall';
-  static const String projectsRoute = '/projects';
+  static const String buildingsRoute = '/buildings';
   static const String profileRoute = '/profile';
   static const String settingsRoute = '/settings';
 

@@ -72,11 +72,11 @@ class NavigationService {
         ),
       ),
       GoRoute(
-        path: AppConstants.projectsRoute,
-        name: 'projects',
+        path: AppConstants.buildingsRoute,
+        name: 'buildings',
         builder: (context, state) => MainLayout(
-          currentRoute: AppConstants.projectsRoute,
-          child: const ProjectsScreen(),
+          currentRoute: AppConstants.buildingsRoute,
+          child: const ProjectsScreen(), // Still using ProjectsScreen (now BuildingsMap)
         ),
       ),
       GoRoute(
@@ -85,7 +85,7 @@ class NavigationService {
         builder: (context, state) {
           final projectId = state.pathParameters['id'] ?? '';
           return MainLayout(
-            currentRoute: AppConstants.projectsRoute,
+            currentRoute: AppConstants.buildingsRoute,
             child: ProjectDetailScreen(projectId: projectId),
           );
         },

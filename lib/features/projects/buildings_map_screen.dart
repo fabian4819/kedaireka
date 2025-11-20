@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart' as mb;
 import 'package:latlong2/latlong.dart';
@@ -12,14 +11,14 @@ import '../../core/services/map_tiles_service.dart';
 import '../../core/services/storage_service.dart';
 import '../../core/utils/logger.dart';
 
-class ProjectsScreen extends StatefulWidget {
-  const ProjectsScreen({super.key});
+class BuildingsMapScreen extends StatefulWidget {
+  const BuildingsMapScreen({super.key});
 
   @override
-  State<ProjectsScreen> createState() => _ProjectsScreenState();
+  State<BuildingsMapScreen> createState() => _BuildingsMapScreenState();
 }
 
-class _ProjectsScreenState extends State<ProjectsScreen> {
+class _BuildingsMapScreenState extends State<BuildingsMapScreen> {
   late mb.MapboxMap _mapboxMap;
   mb.PolygonAnnotationManager? _polygonAnnotationManager;
   mb.PointAnnotationManager? _pointAnnotationManager;
@@ -185,15 +184,15 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
       await Future.delayed(const Duration(milliseconds: 1000));
 
       // Add buildings layer using source-layer system
-      if (_rawBuildingsGeoJson.isNotEmpty) {
-        debugPrint('🏗️ Raw buildings data available, adding buildings layer...');
+      if (_buildings.isNotEmpty) {
+        debugPrint('🏗️ Buildings are available, adding buildings layer...');
         await _addBuildingsLayer();
         debugPrint('🏗️ Buildings layer added, now centering map on building data...');
         // Auto-center map on building data area
         await _centerMapOnBuildings();
         debugPrint('🏗️ Map centering completed');
       } else {
-        debugPrint('⚠️ No raw buildings data available to add to map');
+        debugPrint('⚠️ No buildings available to add to map');
       }
 
       debugPrint('🏗️ Map layers initialized successfully');
@@ -207,37 +206,38 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
     try {
       debugPrint('🏗️ Auto-centering and zooming map on building data...');
 
-      if (_rawBuildingsGeoJson.isEmpty) {
-        debugPrint('⚠️ No buildings GeoJSON data to center on');
+      if (_buildings.isEmpty) {
+        debugPrint('⚠️ No buildings to center on');
         return;
       }
 
-      // Calculate bounds from raw GeoJSON data
-      final bounds = _calculateBoundsFromRawGeoJson();
-      final minLat = bounds['minLat']!;
-      final maxLat = bounds['maxLat']!;
-      final minLng = bounds['minLng']!;
-      final maxLng = bounds['maxLng']!;
+      // Calculate bounds from all buildings
+      double minLat = 90.0; // Start with maximum values
+      double maxLat = -90.0;
+      double minLng = 180.0;
+      double maxLng = -180.0;
 
-      // Check if bounds are valid (fallback to Jakarta coordinates if invalid)
-      double centerLat, centerLng, optimalZoom;
-      if (minLat == 90.0 && maxLat == -90.0 && minLng == 180.0 && maxLng == -180.0) {
-        debugPrint('⚠️ Invalid bounds calculated from GeoJSON data, using Jakarta coordinates as fallback');
-        // Fallback to Jakarta coordinates
-        centerLat = -6.2085;
-        centerLng = 106.8205;
-        optimalZoom = 15.0;
-      } else {
-        // Calculate center point
-        centerLat = (minLat + maxLat) / 2;
-        centerLng = (minLng + maxLng) / 2;
-        debugPrint('🏗️ Buildings bounds from raw GeoJSON: lat[$minLat, $maxLat], lng[$minLng, $maxLng]');
-        debugPrint('🏗️ Calculated center: lat=$centerLat, lng=$centerLng');
+      for (final building in _buildings) {
+        final bounds = building.getBounds();
+        debugPrint('🏗️ Building ${building.id} bounds: ${bounds.south}, ${bounds.west} → ${bounds.north}, ${bounds.east}');
 
-        // Calculate optimal zoom level based on bounds
-        optimalZoom = _calculateOptimalZoom(minLat, maxLat, minLng, maxLng);
-        debugPrint('🏗️ Calculated optimal zoom: $optimalZoom');
+        if (bounds.south < minLat) minLat = bounds.south;
+        if (bounds.north > maxLat) maxLat = bounds.north;
+        if (bounds.west < minLng) minLng = bounds.west;
+        if (bounds.east > maxLng) maxLng = bounds.east;
       }
+
+      // Calculate center point
+      final centerLat = (minLat + maxLat) / 2;
+      final centerLng = (minLng + maxLng) / 2;
+
+      debugPrint('🏗️ Buildings bounds: lat[$minLat, $maxLat], lng[$minLng, $maxLng]');
+      debugPrint('🏗️ Calculated center: lat=$centerLat, lng=$centerLng');
+
+      // Calculate optimal zoom level based on bounds
+      final optimalZoom = _calculateOptimalZoom(minLat, maxLat, minLng, maxLng);
+
+      debugPrint('🏗️ Calculated optimal zoom: $optimalZoom');
 
       // Update the auto-focus variables
       setState(() {
@@ -322,23 +322,13 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
       debugPrint('🏗️ Using raw GeoJSON with ${_rawBuildingsGeoJson['features'].length} buildings');
 
       // Add source for buildings using raw GeoJSON data (bypasses coordinate parsing bug)
-      try {
-        final buildingSource = mb.GeoJsonSource(
-          id: "buildings-source",
-          data: jsonEncode(_rawBuildingsGeoJson),
-        );
-        debugPrint('🏗️ Adding raw GeoJSON source...');
-        await _mapboxMap.style.addSource(buildingSource);
-        debugPrint('🏗️ Raw GeoJSON source added successfully');
-      } catch (e) {
-        // Source might already exist, which is fine for now
-        if (e.toString().contains('already exists')) {
-          debugPrint('🏗️ Buildings source already exists, skipping...');
-        } else {
-          debugPrint('❌ Error adding buildings source: $e');
-          rethrow;
-        }
-      }
+      final buildingSource = mb.GeoJsonSource(
+        id: "buildings-source",
+        data: jsonEncode(_rawBuildingsGeoJson),
+      );
+      debugPrint('🏗️ Adding raw GeoJSON source...');
+      await _mapboxMap.style.addSource(buildingSource);
+      debugPrint('🏗️ Raw GeoJSON source added successfully');
 
       // Add outline layer for better contrast
       final buildingOutlineLayer = mb.LineLayer(
@@ -390,124 +380,12 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
     }
   }
 
-  // Helper method to calculate bounds from raw GeoJSON data
-  Map<String, double> _calculateBoundsFromRawGeoJson() {
-    if (_rawBuildingsGeoJson.isEmpty) {
-      return {'minLat': 0.0, 'maxLat': 0.0, 'minLng': 0.0, 'maxLng': 0.0};
-    }
-
-    double minLat = 90.0; // Start with maximum values
-    double maxLat = -90.0;
-    double minLng = 180.0;
-    double maxLng = -180.0;
-
-    final features = _rawBuildingsGeoJson['features'] as List<dynamic>;
-    int validBuildingsCount = 0;
-
-    for (final feature in features) {
-      try {
-        final geometry = feature['geometry'];
-        if (geometry['type'] == 'Polygon') {
-          final coordinates = geometry['coordinates'] as List<dynamic>;
-          if (coordinates.isNotEmpty) {
-            final ring = coordinates[0] as List<dynamic>;
-            for (final point in ring) {
-              if (point is List && point.length >= 2) {
-                final lat = double.parse(point[1].toString());
-                final lng = double.parse(point[0].toString());
-
-                if (lat < minLat) minLat = lat;
-                if (lat > maxLat) maxLat = lat;
-                if (lng < minLng) minLng = lng;
-                if (lng > maxLng) maxLng = lng;
-              }
-            }
-            validBuildingsCount++;
-          }
-        }
-      } catch (e) {
-        debugPrint('⚠️ Error processing building feature: $e');
-      }
-    }
-
-    debugPrint('🏗️ Calculated bounds from ${validBuildingsCount} valid buildings: lat[$minLat, $maxLat], lng[$minLng, $maxLng]');
-
-    return {
-      'minLat': minLat,
-      'maxLat': maxLat,
-      'minLng': minLng,
-      'maxLng': maxLng,
-    };
-  }
-
-  // Calculate bounding box for a single building from parsed coordinates
-  LatLngBounds _calculateBuildingBounds(Building building) {
-    if (building.coordinates.isEmpty) {
-      // Return empty bounds if no coordinates
-      return LatLngBounds(
-        const LatLng(0, 0), // northWest
-        const LatLng(0, 0), // southEast
-      );
-    }
-
-    double minLat = double.infinity;
-    double maxLat = -double.infinity;
-    double minLng = double.infinity;
-    double maxLng = -double.infinity;
-
-    debugPrint('🏗️ Calculating bounds for building ${building.id} from ${building.coordinates.length} polygons');
-
-    // Calculate bounds from building coordinates (MultiPolygon format)
-    // building.coordinates is List<List<List<List<double>>>>: [polygons] -> [rings] -> [coords] -> [lng, lat]
-    for (final polygon in building.coordinates) {
-      if (polygon is List && polygon.isNotEmpty) {
-        for (final ring in polygon) {
-          if (ring is List && ring.isNotEmpty) {
-            for (final coordPair in ring) {
-              if (coordPair is List && coordPair.length >= 2) {
-                // GeoJSON format is [longitude, latitude]
-                final lng = (coordPair[0] as num).toDouble();
-                final lat = (coordPair[1] as num).toDouble();
-
-                if (lat != 0 && lng != 0) { // Skip invalid coordinates
-                  minLat = math.min(minLat, lat);
-                  maxLat = math.max(maxLat, lat);
-                  minLng = math.min(minLng, lng);
-                  maxLng = math.max(maxLng, lng);
-                }
-              }
-            }
-          }
-        }
-      }
-    }
-
-    // If all coordinates were invalid, return bounds at building's first coordinate
-    if (minLat == double.infinity) {
-      debugPrint('⚠️ No valid coordinates found for building ${building.id}');
-      return LatLngBounds(
-        const LatLng(0, 0), // northWest
-        const LatLng(0, 0), // southEast
-      );
-    }
-
-    debugPrint('🏗️ Building ${building.id} bounds: lat[$minLat, $maxLat], lng[$minLng, $maxLng]');
-
-    return LatLngBounds(
-      LatLng(maxLat, minLng), // northWest (max lat, min lng)
-      LatLng(minLat, maxLng), // southEast (min lat, max lng)
-    );
-  }
-
   void _checkBuildingSelection(LatLng point) {
     debugPrint('🏗️ Checking building selection at: ${point.latitude}, ${point.longitude}');
-    debugPrint('🏗️ Raw GeoJSON data available: ${_rawBuildingsGeoJson.isNotEmpty}');
-    debugPrint('🏗️ Raw GeoJSON features count: ${_rawBuildingsGeoJson.isNotEmpty ? (_rawBuildingsGeoJson['features'] as List<dynamic>).length : 0}');
 
-    // First try precise polygon detection with raw GeoJSON data
+    // Check if we have raw GeoJSON data to use for more accurate selection
     if (_rawBuildingsGeoJson.isNotEmpty) {
       final features = _rawBuildingsGeoJson['features'] as List<dynamic>;
-      debugPrint('🏗️ Processing ${features.length} features for precise polygon click detection');
       for (final feature in features) {
         if (_isPointInGeoJSONFeature(point, feature)) {
           // Find the corresponding building object
@@ -524,66 +402,39 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
           setState(() {
             _selectedBuilding = building;
           });
-          debugPrint('🏗️ Selected building ID: ${building.id} (precise polygon detection)');
+          debugPrint('🏗️ Selected building ID: ${building.id}');
           // Pass the raw feature data to modal to avoid coordinate parsing issues
           _showBuildingInfo(building, feature: feature);
           return;
         }
       }
-      debugPrint('🏗️ No building found with precise polygon detection, trying fallback bounds detection...');
     } else {
-      debugPrint('🏗️ No raw GeoJSON data available for click detection');
-    }
-
-    // Fallback: Use bounding box detection with parsed buildings data
-    debugPrint('🏗️ Using fallback bounding box detection with ${_buildings.length} buildings');
-    for (final building in _buildings) {
-      if (building.coordinates.isNotEmpty) {
-        final bounds = _calculateBuildingBounds(building);
+      // Fallback to using parsed building data
+      for (final building in _buildings) {
+        final bounds = building.getBounds();
         if (_isPointInBounds(point, bounds)) {
           setState(() {
             _selectedBuilding = building;
           });
-          debugPrint('🏗️ Selected building ID: ${building.id} (bounding box detection)');
           _showBuildingInfo(building);
-          return;
+          break;
         }
       }
     }
 
-    debugPrint('🏗️ No building found at clicked position with any detection method');
+    debugPrint('🏗️ No building selected at this position');
   }
 
   // Check if a point is within a GeoJSON polygon feature
   bool _isPointInGeoJSONFeature(LatLng point, dynamic feature) {
     try {
       final geometry = feature['geometry'];
-      final geometryType = geometry['type'] as String;
-
-      debugPrint('🏗️ Checking geometry type: $geometryType');
-
-      if (geometryType == 'Polygon') {
+      if (geometry['type'] == 'Polygon') {
         final coordinates = geometry['coordinates'] as List<dynamic>;
         if (coordinates.isNotEmpty) {
           final ring = coordinates[0] as List<dynamic>;
           return _isPointInPolygonRing(point, ring);
         }
-      } else if (geometryType == 'MultiPolygon') {
-        final coordinates = geometry['coordinates'] as List<dynamic>;
-        debugPrint('🏗️ MultiPolygon has ${coordinates.length} polygons');
-
-        for (final polygon in coordinates) {
-          if (polygon is List && polygon.isNotEmpty) {
-            final ring = polygon[0] as List<dynamic>;
-            if (_isPointInPolygonRing(point, ring)) {
-              debugPrint('🏗️ Point found in MultiPolygon polygon');
-              return true;
-            }
-          }
-        }
-        debugPrint('🏗️ Point not found in any MultiPolygon polygon');
-      } else {
-        debugPrint('🏗️ Unsupported geometry type: $geometryType');
       }
     } catch (e) {
       debugPrint('❌ Error checking GeoJSON feature: $e');
@@ -1146,5 +997,3 @@ class _InfoRow extends StatelessWidget {
     );
   }
 }
-
-  

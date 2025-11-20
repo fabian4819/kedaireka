@@ -50,8 +50,8 @@ class MainLayout extends StatelessWidget {
                   label: 'AR',
                 ),
                 BottomNavigationBarItem(
-                  icon: Icon(Icons.folder),
-                  label: 'Projects',
+                  icon: Icon(Icons.location_city),
+                  label: 'Buildings',
                 ),
                 BottomNavigationBarItem(
                   icon: Icon(Icons.person),
@@ -70,7 +70,7 @@ class MainLayout extends StatelessWidget {
       AppConstants.homeRoute,
       AppConstants.mapsRoute,
       AppConstants.arRoute,
-      AppConstants.projectsRoute,
+      AppConstants.buildingsRoute,
       AppConstants.profileRoute,
     ];
     return mainRoutes.contains(route);
@@ -84,7 +84,7 @@ class MainLayout extends StatelessWidget {
         return 1;
       case AppConstants.arRoute:
         return 2;
-      case AppConstants.projectsRoute:
+      case AppConstants.buildingsRoute:
         return 3;
       case AppConstants.profileRoute:
         return 4;
@@ -105,7 +105,7 @@ class MainLayout extends StatelessWidget {
         context.go(AppConstants.arRoute);
         break;
       case 3:
-        context.go(AppConstants.projectsRoute);
+        context.go(AppConstants.buildingsRoute);
         break;
       case 4:
         context.go(AppConstants.profileRoute);
