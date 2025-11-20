@@ -5,6 +5,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter/foundation.dart' as foundation;
+import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart' as mb;
 import 'firebase_options.dart';
 import 'core/services/navigation_service.dart';
 import 'core/services/backend_auth_service.dart';
@@ -14,6 +15,7 @@ import 'core/utils/logger.dart';
 import 'features/auth/bloc/auth_bloc.dart';
 import 'features/auth/bloc/auth_event.dart';
 import 'shared/widgets/floating_call_widget.dart';
+import 'core/config/app_config.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -42,6 +44,15 @@ void main() async {
     AppLogger.warning('Could not set up PlatformDispatcher error handler: $e');
   }
 
+  // Initialize Mapbox
+  try {
+    AppLogger.info('Initializing Mapbox...');
+    mb.MapboxOptions.setAccessToken(MapboxConfig.accessToken);
+    AppLogger.info('Mapbox initialized successfully');
+  } catch (e, stackTrace) {
+    AppLogger.error('Failed to initialize Mapbox', error: e, stackTrace: stackTrace);
+  }
+
   try {
     AppLogger.info('Initializing Firebase...');
     await Firebase.initializeApp(
@@ -65,8 +76,7 @@ class KedairekaApp extends StatelessWidget {
     return MultiProvider(
       providers: [
         BlocProvider(
-          create: (context) => AuthBloc(authService: BackendAuthService())
-            ..add(AuthInitialized()),
+          create: (context) => AuthBloc(authService: BackendAuthService()),
         ),
         ChangeNotifierProvider(
           create: (context) => CallStateProvider(),

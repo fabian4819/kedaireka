@@ -49,5 +49,11 @@
 	<!-- Permissions for Agora screen sharing -->
 	<key>NSMicrophoneUsageDescription</key>
 	<string>This app needs access to microphone for screen sharing and voice communication</string>
+
+	<!-- Location permissions for mapping -->
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>This app needs location access to show your current location on the map</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>This app needs location access to show your current location on the map even when the app is in background</string>
 </dict>
 </plist>

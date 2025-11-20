@@ -5,6 +5,21 @@ class AppConfig {
   );
 
   static String get baseUrl => _baseUrl;
+
+  // Mapbox Configuration
+  static const String mapboxAccessToken = 'pk.eyJ1IjoiZ2VudGlhd2FuIiwiYSI6ImNseDdoZjBsdDByYTUya3BtdmNmd25nMHQifQ.rLQeC_xQRZFBFKI_jzM69Q';
+  static const String mapboxStyleUrl = 'mapbox://styles/gentiawan/cmi0jt9z6004t01qxgji18024';
+}
+
+class MapboxConfig {
+  static const String accessToken = AppConfig.mapboxAccessToken;
+  static const String styleUrl = AppConfig.mapboxStyleUrl;
+
+  // Additional Mapbox styles for switching
+  static const String satelliteStyle = 'mapbox://styles/mapbox/satellite-v9';
+  static const String streetStyle = 'mapbox://styles/mapbox/streets-v12';
+  static const String lightStyle = 'mapbox://styles/mapbox/light-v11';
+  static const String darkStyle = 'mapbox://styles/mapbox/dark-v11';
 }
 
 class AuthEndpoints {

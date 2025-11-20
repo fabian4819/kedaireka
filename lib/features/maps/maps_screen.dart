@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_map/flutter_map.dart';
+import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart' as mb;
 import 'package:latlong2/latlong.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:permission_handler/permission_handler.dart';
 import '../../core/theme/app_theme.dart';
+import '../../core/config/app_config.dart';
 
 class MapsScreen extends StatefulWidget {
   const MapsScreen({super.key});
@@ -12,17 +14,18 @@ class MapsScreen extends StatefulWidget {
 }
 
 class _MapsScreenState extends State<MapsScreen> {
-  final MapController _mapController = MapController();
+  late mb.MapboxMap _mapboxMap;
 
   // Default location (Universitas Gadjah Mada, Yogyakarta)
   static const LatLng _initialPosition = LatLng(-7.771043857941956, 110.37910160750407);
   static const double _initialZoom = 18.0;
 
   Position? _currentPosition;
-  List<Marker> _markers = [];
-  List<Polygon> _polygons = [];
+  final List<mb.PointAnnotation> _markers = [];
   bool _isLoading = true;
-  String _mapType = 'osm'; // Options: 'osm', 'satellite', 'esri_topo'
+  String _currentStyle = 'custom'; // Options: 'custom', 'satellite', 'street', 'light', 'dark'
+  mb.PointAnnotationManager? _pointAnnotationManager;
+  double _currentZoom = _initialZoom;
 
   @override
   void initState() {
@@ -35,6 +38,7 @@ class _MapsScreenState extends State<MapsScreen> {
       bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
       if (!serviceEnabled) {
         _showLocationError('Location services are disabled.');
+        _useDefaultLocation();
         return;
       }
 
@@ -42,149 +46,315 @@ class _MapsScreenState extends State<MapsScreen> {
       if (permission == LocationPermission.denied) {
         permission = await Geolocator.requestPermission();
         if (permission == LocationPermission.denied) {
-          _showLocationError('Location permissions are denied');
+          _showLocationError('Location permissions denied. Using default location.');
+          _useDefaultLocation();
           return;
         }
       }
 
       if (permission == LocationPermission.deniedForever) {
-        _showLocationError('Location permissions are permanently denied');
+        _showLocationError('Location permissions permanently denied. Using default location.');
+        _useDefaultLocation();
         return;
       }
 
       Position position = await Geolocator.getCurrentPosition(
         desiredAccuracy: LocationAccuracy.high,
+        timeLimit: const Duration(seconds: 10),
       );
 
       setState(() {
         _currentPosition = position;
-        _markers.add(
-          Marker(
-            point: LatLng(position.latitude, position.longitude),
-            width: 80,
-            height: 80,
-            child: const Column(
-              children: [
-                Icon(Icons.location_on, color: Colors.blue, size: 40),
-                Text(
-                  'You are here',
-                  style: TextStyle(
-                    fontSize: 10,
-                    fontWeight: FontWeight.bold,
-                    backgroundColor: Colors.white,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
         _isLoading = false;
       });
 
-      _mapController.move(
-        LatLng(position.latitude, position.longitude),
-        18.0,
-      );
+      // Add current location marker after map is ready
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _addCurrentLocationMarker(position);
+      });
+
+      // Show success message
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Location acquired successfully'),
+            duration: Duration(seconds: 2),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+
     } catch (e) {
-      _showLocationError('Error getting location: $e');
+      String errorMessage = 'Error getting location: $e';
+
+      // Check for common iOS emulator issues
+      if (e.toString().contains('permission') || e.toString().contains('Permission')) {
+        errorMessage = 'Location permission issue. Using default location for now.';
+      } else if (e.toString().contains('timeout') || e.toString().contains('Timeout')) {
+        errorMessage = 'Location request timed out. Using default location.';
+      } else if (e.toString().contains('location') && e.toString().contains('unavailable')) {
+        errorMessage = 'Location services unavailable. Using default location.';
+      }
+
+      _showLocationError(errorMessage);
+      _useDefaultLocation();
+    }
+  }
+
+  void _useDefaultLocation() {
+    setState(() {
+      _currentPosition = Position(
+        latitude: _initialPosition.latitude,
+        longitude: _initialPosition.longitude,
+        timestamp: DateTime.now(),
+        accuracy: 100.0,
+        altitude: 0.0,
+        altitudeAccuracy: 0.0,
+        heading: 0.0,
+        headingAccuracy: 0.0,
+        speed: 0.0,
+        speedAccuracy: 0.0,
+      );
+      _isLoading = false;
+    });
+
+    // Add marker for default location
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _addCurrentLocationMarker(_currentPosition!);
+    });
+  }
+
+  void _onMapCreated(mb.MapboxMap mapboxMap) {
+    _mapboxMap = mapboxMap;
+    _initializeAnnotationManagers();
+  }
+
+  Future<void> _initializeAnnotationManagers() async {
+    try {
+      _pointAnnotationManager = await _mapboxMap.annotations.createPointAnnotationManager();
+
+      // Add current location marker if available
+      if (_currentPosition != null) {
+        _addCurrentLocationMarker(_currentPosition!);
+      }
+    } catch (e) {
+      debugPrint('Error initializing annotation managers: $e');
+    }
+  }
+
+  Future<void> _addCurrentLocationMarker(Position position) async {
+    if (_pointAnnotationManager == null) return;
+
+    try {
+      final markerOptions = mb.PointAnnotationOptions(
+        geometry: mb.Point(
+          coordinates: mb.Position(position.longitude, position.latitude),
+        ),
+        iconSize: 1.5,
+      );
+
+      final annotation = await _pointAnnotationManager!.create(markerOptions);
+      _markers.add(annotation);
+    } catch (e) {
+      debugPrint('Error adding current location marker: $e');
+    }
+  }
+
+  Future<void> _addMapMarker(LatLng latLng) async {
+    if (_pointAnnotationManager == null) return;
+
+    try {
+      final markerOptions = mb.PointAnnotationOptions(
+        geometry: mb.Point(
+          coordinates: mb.Position(latLng.longitude, latLng.latitude),
+        ),
+        iconSize: 1.5,
+      );
+
+      final annotation = await _pointAnnotationManager!.create(markerOptions);
+      _markers.add(annotation);
+    } catch (e) {
+      debugPrint('Error adding map marker: $e');
     }
   }
 
   void _showLocationError(String message) {
     setState(() => _isLoading = false);
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message)),
+      SnackBar(
+        content: Text(message),
+        action: SnackBarAction(
+          label: 'Settings',
+          textColor: Colors.white,
+          onPressed: () => _showPermissionDialog(),
+        ),
+      ),
     );
   }
 
-  void _onMapTapped(TapPosition tapPosition, LatLng point) {
-    setState(() {
-      _markers.add(
-        Marker(
-          point: point,
-          width: 80,
-          height: 80,
-          child: Column(
+  void _showPermissionDialog() {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('Location Permission Required'),
+          content: const Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Icon(Icons.location_on, color: Colors.red, size: 40),
-              Container(
-                padding: const EdgeInsets.all(2),
-                decoration: const BoxDecoration(
-                  color: Colors.white,
-                ),
-                child: Text(
-                  'Lat: ${point.latitude.toStringAsFixed(6)}\nLng: ${point.longitude.toStringAsFixed(6)}',
-                  style: const TextStyle(fontSize: 8),
-                  textAlign: TextAlign.center,
-                ),
+              Text(
+                'To enable location access in iOS Simulator:',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+              SizedBox(height: 12),
+              Text('1. Go to iOS Simulator Settings app'),
+              Text('2. Tap "Privacy & Security"'),
+              Text('3. Tap "Location Services"'),
+              Text('4. Enable Location Services'),
+              Text('5. Find "Pix2Land" and set to "While Using"'),
+              SizedBox(height: 12),
+              Text(
+                'Or continue with default location (UGM Campus)',
+                style: TextStyle(fontStyle: FontStyle.italic),
               ),
             ],
           ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+                _openAppSettings();
+              },
+              child: const Text('Open Settings'),
+            ),
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+              },
+              child: const Text('Use Default Location'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<void> _openAppSettings() async {
+    await openAppSettings();
+  }
+
+  void _onMapTapped(mb.ScreenCoordinate coordinate) async {
+    // For now, just add a marker at the current position
+    if (_currentPosition != null) {
+      final latLng = LatLng(_currentPosition!.latitude, _currentPosition!.longitude);
+      await _addMapMarker(latLng);
+      _showCoordinateInfo(latLng);
+    }
+  }
+
+  void _showCoordinateInfo(LatLng latLng) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          'Lat: ${latLng.latitude.toStringAsFixed(6)}\nLng: ${latLng.longitude.toStringAsFixed(6)}',
         ),
-      );
-    });
+        duration: const Duration(seconds: 2),
+      ),
+    );
   }
 
   void _toggleMapType() {
+    String nextStyle;
+
+    switch (_currentStyle) {
+      case 'custom':
+        nextStyle = 'satellite';
+        break;
+      case 'satellite':
+        nextStyle = 'street';
+        break;
+      case 'street':
+        nextStyle = 'light';
+        break;
+      case 'light':
+        nextStyle = 'dark';
+        break;
+      case 'dark':
+      default:
+        nextStyle = 'custom';
+        break;
+    }
+
     setState(() {
-      if (_mapType == 'osm') {
-        _mapType = 'satellite';
-      } else if (_mapType == 'satellite') {
-        _mapType = 'esri_topo';
-      } else {
-        _mapType = 'osm';
-      }
+      _currentStyle = nextStyle;
     });
+
+    // Style switching will recreate the map widget with new style
+  }
+
+  String _getStyleUri() {
+    switch (_currentStyle) {
+      case 'satellite':
+        return MapboxConfig.satelliteStyle;
+      case 'street':
+        return MapboxConfig.streetStyle;
+      case 'light':
+        return MapboxConfig.lightStyle;
+      case 'dark':
+        return MapboxConfig.darkStyle;
+      case 'custom':
+      default:
+        return MapboxConfig.styleUrl;
+    }
   }
 
   String _getMapTypeName() {
-    switch (_mapType) {
+    switch (_currentStyle) {
       case 'satellite':
         return 'Satellite';
-      case 'esri_topo':
-        return 'ESRI Topo';
-      default:
+      case 'street':
         return 'Street';
+      case 'light':
+        return 'Light';
+      case 'dark':
+        return 'Dark';
+      case 'custom':
+      default:
+        return 'Custom';
     }
   }
 
   IconData _getMapTypeIcon() {
-    switch (_mapType) {
+    switch (_currentStyle) {
       case 'satellite':
         return Icons.satellite;
-      case 'esri_topo':
-        return Icons.terrain;
-      default:
+      case 'street':
         return Icons.map;
+      case 'light':
+        return Icons.light_mode;
+      case 'dark':
+        return Icons.dark_mode;
+      case 'custom':
+      default:
+        return Icons.layers;
     }
   }
 
-  void _clearMarkers() {
-    setState(() {
-      _markers.clear();
-      if (_currentPosition != null) {
-        _markers.add(
-          Marker(
-            point: LatLng(_currentPosition!.latitude, _currentPosition!.longitude),
-            width: 80,
-            height: 80,
-            child: const Column(
-              children: [
-                Icon(Icons.location_on, color: Colors.blue, size: 40),
-                Text(
-                  'You are here',
-                  style: TextStyle(
-                    fontSize: 10,
-                    fontWeight: FontWeight.bold,
-                    backgroundColor: Colors.white,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
+  void _clearMarkers() async {
+    if (_pointAnnotationManager != null) {
+      try {
+        // Clear all annotations
+        await _pointAnnotationManager!.deleteAll();
+        _markers.clear();
+
+        // Re-add current location marker if available
+        if (_currentPosition != null) {
+          await _addCurrentLocationMarker(_currentPosition!);
+        }
+      } catch (e) {
+        debugPrint('Error clearing markers: $e');
       }
-    });
+    }
   }
 
   @override
@@ -224,25 +394,19 @@ class _MapsScreenState extends State<MapsScreen> {
             )
           : Stack(
               children: [
-                FlutterMap(
-                  mapController: _mapController,
-                  options: MapOptions(
-                    initialCenter: _initialPosition,
-                    initialZoom: _initialZoom,
-                    onTap: _onMapTapped,
-                  ),
-                  children: [
-                    TileLayer(
-                      urlTemplate: _mapType == 'satellite'
-                          ? 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'
-                          : _mapType == 'esri_topo'
-                              ? 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}'
-                              : 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                      userAgentPackageName: 'com.kedaireka.app',
+                mb.MapWidget(
+                  key: ValueKey('mapbox_map_$_currentStyle'),
+                  onMapCreated: _onMapCreated,
+                  styleUri: _getStyleUri(),
+                  cameraOptions: mb.CameraOptions(
+                    center: mb.Point(
+                      coordinates: mb.Position(
+                        _currentPosition?.longitude ?? _initialPosition.longitude,
+                        _currentPosition?.latitude ?? _initialPosition.latitude,
+                      ),
                     ),
-                    MarkerLayer(markers: _markers),
-                    PolygonLayer(polygons: _polygons),
-                  ],
+                    zoom: _currentZoom,
+                  ),
                 ),
                 Positioned(
                   bottom: 16,

@@ -82,14 +82,37 @@ class BackendAuthService {
         _authStateController.add(_currentUser);
         AppLogger.auth('Registration successful for: $email');
         return data;
+      } else if (response.statusCode == 429) {
+        // Handle rate limiting specifically
+        final retryAfter = _getRetryAfterFromHeaders(response.headers);
+        final message = data['message'] ?? 'Too many requests. Please try again later.';
+        AppLogger.auth('Rate limit hit during registration: $message');
+        throw RateLimitException(message, retryAfter: retryAfter);
       } else {
         AppLogger.error('Registration API error: ${data['message'] ?? 'Unknown error'}', tag: 'API');
         throw Exception(data['message'] ?? 'Registration failed');
       }
     } catch (e, stackTrace) {
       AppLogger.api('Registration request failed', error: e, stackTrace: stackTrace);
+      if (e is RateLimitException) {
+        rethrow; // Re-throw rate limit exceptions as-is
+      }
       throw Exception('Registration failed: ${e.toString()}');
     }
+  }
+
+  // Extract retry-after duration from response headers
+  Duration _getRetryAfterFromHeaders(Map<String, String> headers) {
+    final retryAfter = headers['retry-after'];
+    if (retryAfter != null) {
+      try {
+        final seconds = int.parse(retryAfter);
+        return Duration(seconds: seconds);
+      } catch (e) {
+        AppLogger.warning('Could not parse retry-after header: $retryAfter');
+      }
+    }
+    return const Duration(minutes: 15); // Default fallback
   }
 
   // Login with email/password
@@ -119,12 +142,21 @@ class BackendAuthService {
         _authStateController.add(_currentUser);
         AppLogger.auth('Login successful for: $email');
         return data;
+      } else if (response.statusCode == 429) {
+        // Handle rate limiting specifically
+        final retryAfter = _getRetryAfterFromHeaders(response.headers);
+        final message = data['message'] ?? 'Too many requests. Please try again later.';
+        AppLogger.auth('Rate limit hit during login: $message');
+        throw RateLimitException(message, retryAfter: retryAfter);
       } else {
         AppLogger.error('Login API error: ${data['message'] ?? 'Unknown error'}', tag: 'API');
         throw Exception(data['message'] ?? 'Login failed');
       }
     } catch (e, stackTrace) {
       AppLogger.api('Login request failed', error: e, stackTrace: stackTrace);
+      if (e is RateLimitException) {
+        rethrow; // Re-throw rate limit exceptions as-is
+      }
       throw Exception('Login failed: ${e.toString()}');
     }
   }
@@ -374,5 +406,21 @@ class BackendAuthService {
   // Dispose the stream controller
   void dispose() {
     _authStateController.close();
+  }
+}
+
+// Custom exception for rate limiting
+class RateLimitException implements Exception {
+  final String message;
+  final Duration? retryAfter;
+
+  RateLimitException(this.message, {this.retryAfter});
+
+  @override
+  String toString() {
+    if (retryAfter != null) {
+      return '$message Please try again in ${retryAfter!.inMinutes} minutes.';
+    }
+    return message;
   }
 }

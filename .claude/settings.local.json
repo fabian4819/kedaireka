@@ -27,7 +27,9 @@
       "Bash(export JAVA_HOME=/opt/homebrew/opt/openjdk@17:*)",
       "Bash(export PATH=\"/opt/homebrew/opt/openjdk@17/bin:$PATH\":*)",
       "Bash(rm:*)",
-      "Bash(pod cache clean:*)"
+      "Bash(pod cache clean:*)",
+      "Bash(security find-identity:*)",
+      "Bash(xcrun simctl list devices:*)"
     ],
     "deny": [],
     "ask": []

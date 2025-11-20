@@ -3,6 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/constants/app_constants.dart';
 import '../../core/theme/app_theme.dart';
+import '../../core/services/backend_auth_service.dart';
 import 'bloc/auth_bloc.dart';
 import 'bloc/auth_event.dart';
 import 'bloc/auth_state.dart';
@@ -23,6 +24,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
   bool _obscurePassword = true;
   bool _obscureConfirmPassword = true;
 
+  // Add debouncing for button clicks
+  DateTime? _lastRegisterAttempt;
+  DateTime? _lastGoogleSignInAttempt;
+  static const Duration _buttonDebounceDelay = Duration(milliseconds: 500);
+
   @override
   void dispose() {
     _nameController.dispose();
@@ -33,6 +39,16 @@ class _RegisterScreenState extends State<RegisterScreen> {
   }
 
   void _handleRegister() {
+    final now = DateTime.now();
+
+    // Debounce register attempts
+    if (_lastRegisterAttempt != null &&
+        now.difference(_lastRegisterAttempt!) < _buttonDebounceDelay) {
+      return;
+    }
+
+    _lastRegisterAttempt = now;
+
     if (_formKey.currentState!.validate()) {
       context.read<AuthBloc>().add(
         AuthRegisterRequested(
@@ -45,6 +61,15 @@ class _RegisterScreenState extends State<RegisterScreen> {
   }
 
   void _handleGoogleSignIn() {
+    final now = DateTime.now();
+
+    // Debounce Google sign-in attempts
+    if (_lastGoogleSignInAttempt != null &&
+        now.difference(_lastGoogleSignInAttempt!) < _buttonDebounceDelay) {
+      return;
+    }
+
+    _lastGoogleSignInAttempt = now;
     context.read<AuthBloc>().add(AuthGoogleSignInRequested());
   }
 
@@ -58,10 +83,28 @@ class _RegisterScreenState extends State<RegisterScreen> {
           // Navigate to email verification screen after registration
           context.go(AppConstants.emailVerificationRoute);
         } else if (state is AuthError) {
+          String message = state.message;
+          Color backgroundColor = Colors.red;
+
+          // Check if this is a rate limit error
+          if (state.message.contains('Too many requests') ||
+              state.message.contains('Too many authentication attempts')) {
+            message = 'Too many registration attempts. Please wait a few minutes before trying again.';
+            backgroundColor = Colors.orange;
+          }
+
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text(state.message),
-              backgroundColor: Colors.red,
+              content: Text(message),
+              backgroundColor: backgroundColor,
+              duration: const Duration(seconds: 5),
+              action: SnackBarAction(
+                label: 'Dismiss',
+                textColor: Colors.white,
+                onPressed: () {
+                  ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                },
+              ),
             ),
           );
         }

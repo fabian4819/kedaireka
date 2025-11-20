@@ -10,6 +10,10 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
   final BackendAuthService _authService;
   late StreamSubscription<BackendUser?> _authSubscription;
 
+  // Add deduplication timers
+  DateTime? _lastInitializedEventTime;
+  static const Duration _eventDebounceDelay = Duration(milliseconds: 500);
+
   AuthBloc({required BackendAuthService authService})
       : _authService = authService,
         super(AuthInitial()) {
@@ -24,8 +28,22 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     on<AuthEmailVerificationChecked>(_onEmailVerificationChecked);
 
     _authSubscription = _authService.authStateChanges.listen((user) {
-      add(AuthInitialized());
+      _debouncedAddAuthInitialized();
     });
+  }
+
+  void _debouncedAddAuthInitialized() {
+    final now = DateTime.now();
+
+    // Skip if we've already processed an AuthInitialized event recently
+    if (_lastInitializedEventTime != null &&
+        now.difference(_lastInitializedEventTime!) < _eventDebounceDelay) {
+      AppLogger.bloc('Skipping AuthInitialized event due to debounce');
+      return;
+    }
+
+    _lastInitializedEventTime = now;
+    add(AuthInitialized());
   }
 
   Future<void> _onAuthInitialized(AuthInitialized event, Emitter<AuthState> emit) async {
