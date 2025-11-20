@@ -173,10 +173,31 @@ class EmailVerificationScreen extends StatelessWidget {
                         child: OutlinedButton.icon(
                           onPressed: isLoading ? null : () => _handleResendVerification(context),
                           icon: const Icon(Icons.refresh),
-                          label: const Text('Resend Verification Email'),
+                          label: const Text('Send Verification Email'),
                           style: OutlinedButton.styleFrom(
                             side: const BorderSide(color: AppTheme.primaryColor),
                             foregroundColor: AppTheme.primaryColor,
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+
+                  const SizedBox(height: 8),
+
+                  // Skip Verification Button (for testing)
+                  BlocBuilder<AuthBloc, AuthState>(
+                    builder: (context, state) {
+                      final isLoading = state is AuthLoading;
+                      return SizedBox(
+                        width: double.infinity,
+                        height: 48,
+                        child: TextButton.icon(
+                          onPressed: isLoading ? null : () => _handleCheckVerification(context),
+                          icon: const Icon(Icons.skip_next),
+                          label: const Text('Skip Verification (Testing)'),
+                          style: TextButton.styleFrom(
+                            foregroundColor: Colors.grey,
                           ),
                         ),
                       );

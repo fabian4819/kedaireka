@@ -1,22 +1,59 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
+import 'package:flutter/foundation.dart' as foundation;
 import 'firebase_options.dart';
 import 'core/services/navigation_service.dart';
-import 'core/services/auth_service.dart';
+import 'core/services/backend_auth_service.dart';
 import 'core/theme/app_theme.dart';
 import 'core/providers/call_state_provider.dart';
+import 'core/utils/logger.dart';
 import 'features/auth/bloc/auth_bloc.dart';
 import 'features/auth/bloc/auth_event.dart';
 import 'shared/widgets/floating_call_widget.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await Firebase.initializeApp(
-    options: DefaultFirebaseOptions.currentPlatform,
-  );
+
+  // Set up global error handlers
+  FlutterError.onError = (FlutterErrorDetails details) {
+    AppLogger.error(
+      'Flutter Error: ${details.exception}',
+      error: details.exception,
+      stackTrace: details.stack,
+    );
+  };
+
+  // Set up platform error handler for newer Flutter versions
+  try {
+    foundation.PlatformDispatcher.instance.onError = (error, stack) {
+      AppLogger.error(
+        'Platform Error: $error',
+        error: error,
+        stackTrace: stack,
+      );
+      return true;
+    };
+  } catch (e) {
+    // Fallback for older Flutter versions - just log the error
+    AppLogger.warning('Could not set up PlatformDispatcher error handler: $e');
+  }
+
+  try {
+    AppLogger.info('Initializing Firebase...');
+    await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
+    );
+    AppLogger.info('Firebase initialized successfully');
+  } catch (e, stackTrace) {
+    AppLogger.error('Failed to initialize Firebase', error: e, stackTrace: stackTrace);
+    rethrow;
+  }
+
+  AppLogger.info('Starting Kedaireka app...');
   runApp(const KedairekaApp());
 }
 
@@ -28,7 +65,7 @@ class KedairekaApp extends StatelessWidget {
     return MultiProvider(
       providers: [
         BlocProvider(
-          create: (context) => AuthBloc(authService: AuthService())
+          create: (context) => AuthBloc(authService: BackendAuthService())
             ..add(AuthInitialized()),
         ),
         ChangeNotifierProvider(
@@ -44,6 +81,59 @@ class KedairekaApp extends StatelessWidget {
             routerConfig: NavigationService.router,
             debugShowCheckedModeBanner: false,
             builder: (context, child) {
+              ErrorWidget.builder = (FlutterErrorDetails errorDetails) {
+                AppLogger.error(
+                  'Error Widget: ${errorDetails.exception}',
+                  error: errorDetails.exception,
+                  stackTrace: errorDetails.stack,
+                );
+                return MaterialApp(
+                  home: Scaffold(
+                    backgroundColor: Colors.red[50],
+                    body: Center(
+                      child: Padding(
+                        padding: const EdgeInsets.all(16.0),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.error, color: Colors.red[700], size: 64),
+                            const SizedBox(height: 16),
+                            Text(
+                              'Something went wrong',
+                              style: TextStyle(
+                                fontSize: 24,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.red[700],
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              'Check the terminal for detailed error logs',
+                              style: TextStyle(
+                                fontSize: 16,
+                                color: Colors.red[600],
+                              ),
+                              textAlign: TextAlign.center,
+                            ),
+                            const SizedBox(height: 24),
+                            ElevatedButton(
+                              onPressed: () {
+                                // Restart the app
+                                runApp(const KedairekaApp());
+                              },
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.red[700],
+                                foregroundColor: Colors.white,
+                              ),
+                              child: const Text('Restart App'),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                );
+              };
               return _AppWithFloatingWidget(child: child);
             },
           );
@@ -89,7 +179,8 @@ class _FloatingWidgetOverlay extends StatelessWidget {
       if (routerState.uri.path == '/videocall') {
         return const SizedBox.shrink();
       }
-    } catch (e) {
+    } catch (e, stackTrace) {
+      AppLogger.error('Error getting router state for floating widget', error: e, stackTrace: stackTrace);
       // No route available yet, don't show widget
       return const SizedBox.shrink();
     }
