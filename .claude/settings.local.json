@@ -31,7 +31,8 @@
       "Bash(security find-identity:*)",
       "Bash(xcrun simctl list devices:*)",
       "Bash(git pull:*)",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Bash(git commit:*)"
     ],
     "deny": [],
     "ask": []
