@@ -7,6 +7,7 @@ import '../auth/bloc/auth_bloc.dart';
 import '../auth/bloc/auth_event.dart';
 import '../auth/bloc/auth_state.dart';
 import '../../core/services/map_tiles_service.dart';
+import '../../core/services/storage_service.dart';
 
 // Helper widget for info rows to avoid scoping issues
 class _InfoRow extends StatelessWidget {
@@ -810,7 +811,7 @@ class _SavedItemsSectionState extends State<SavedItemsSection> {
   Future<void> _loadSavedItems() async {
     setState(() => _isLoading = true);
     try {
-      // Get actual tiles and buildings, then filter for saved ones
+      // Get actual tiles and buildings from API
       final results = await Future.wait([
         MapTilesService().getTiles(),
         MapTilesService().getBuildings(),
@@ -818,14 +819,19 @@ class _SavedItemsSectionState extends State<SavedItemsSection> {
       final tiles = results[0] as List<MapTile>;
       final buildings = results[1] as List<Building>;
 
+      // Get saved items from storage service
+      final savedTiles = await StorageService().getSavedTiles(tiles);
+      final savedBuildings = await StorageService().getSavedBuildings(buildings);
+
       setState(() {
-        // Filter to show only tiles that are actually saved
-        _savedTiles = tiles.where((tile) => tile.isSaved).toList();
-        // Filter to show only buildings that are actually saved
-        _savedBuildings = buildings.where((building) => building.isSaved).toList();
+        _savedTiles = savedTiles;
+        _savedBuildings = savedBuildings;
         _isLoading = false;
       });
+
+      print('✅ Loaded ${savedTiles.length} saved tiles and ${savedBuildings.length} saved buildings from storage');
     } catch (e) {
+      print('❌ Error loading saved items: $e');
       setState(() => _isLoading = false);
     }
   }

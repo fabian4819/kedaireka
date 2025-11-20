@@ -8,6 +8,7 @@ import 'package:http/http.dart' as http;
 import '../../core/theme/app_theme.dart';
 import '../../core/config/app_config.dart';
 import '../../core/services/map_tiles_service.dart';
+import '../../core/services/storage_service.dart';
 
 class MapsScreen extends StatefulWidget {
   const MapsScreen({super.key});
@@ -83,6 +84,9 @@ class _MapsScreenState extends State<MapsScreen> {
 
         // Still load parsed tiles for UI functionality (but we won't use coordinates for rendering)
         final tiles = await MapTilesService().getTiles();
+
+        // Update tiles with their saved status from local storage
+        await StorageService().updateSavedStatus(tiles, []);
         _tiles = tiles;
       } else {
         throw Exception('Failed to load tiles: ${response.statusCode}');
@@ -461,15 +465,25 @@ class _MapsScreenState extends State<MapsScreen> {
     );
   }
 
-  void _saveTile(MapTile tile) {
-    // TODO: Implement save functionality
-    setState(() {
-      tile.isSaved = true;
-    });
-    Navigator.pop(context);
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Tile ${tile.id} saved successfully!')),
-    );
+  void _saveTile(MapTile tile) async {
+    try {
+      // Save to local storage
+      await StorageService().saveTile(tile.id);
+
+      // Update UI state
+      setState(() {
+        tile.isSaved = true;
+      });
+
+      Navigator.pop(context);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Tile ${tile.id} saved successfully!')),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to save tile: $e')),
+      );
+    }
   }
 
   void _toggleMapType() {

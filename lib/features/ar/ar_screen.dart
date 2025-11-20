@@ -6,6 +6,7 @@ import 'package:latlong2/latlong.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/services/unity_channel_service.dart';
 import '../../core/services/map_tiles_service.dart';
+import '../../core/services/storage_service.dart';
 
 class ARScreen extends StatefulWidget {
   const ARScreen({super.key});
@@ -376,15 +377,26 @@ class _ARScreenState extends State<ARScreen> with WidgetsBindingObserver {
     );
   }
 
-  void _saveBuilding(Building building) {
-    setState(() {
-      building.isSaved = true;
-      _savedBuildings.add(building);
-    });
-    Navigator.pop(context);
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Building ${building.id} saved successfully!')),
-    );
+  void _saveBuilding(Building building) async {
+    try {
+      // Save to local storage
+      await StorageService().saveBuilding(building.id);
+
+      // Update UI state
+      setState(() {
+        building.isSaved = true;
+        _savedBuildings.add(building);
+      });
+
+      Navigator.pop(context);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Building ${building.id} saved successfully!')),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to save building: $e')),
+      );
+    }
   }
 
   void _toggleBuildings() {
