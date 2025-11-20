@@ -5,6 +5,7 @@ import '../../features/auth/register_screen.dart';
 import '../../features/auth/email_verification_screen.dart';
 import '../../features/home/home_screen.dart';
 import '../../features/maps/maps_screen.dart';
+import '../../features/maps/saved_sections_screen.dart';
 import '../../features/ar/ar_screen.dart';
 import '../../features/videocall/videocall_screen.dart';
 import '../../features/projects/projects_screen.dart';
@@ -101,6 +102,11 @@ class NavigationService {
         path: AppConstants.settingsRoute,
         name: 'settings',
         builder: (context, state) => const SettingsScreen(),
+      ),
+      GoRoute(
+        path: '/saved-sections',
+        name: 'saved_sections',
+        builder: (context, state) => const SavedSectionsScreen(),
       ),
     ],
   );
