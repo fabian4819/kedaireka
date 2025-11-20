@@ -39,7 +39,13 @@
       "Bash(pkill:*)",
       "Bash(git checkout:*)",
       "WebSearch",
-      "WebFetch(domain:pub.dev)"
+      "WebFetch(domain:pub.dev)",
+      "Bash(cat:*)",
+      "Bash(/tmp/profile_screen_temp.dart)",
+      "WebFetch(domain:code.claude.com)",
+      "Bash(chmod:*)",
+      "Bash(./.claude/switch-model.sh:*)",
+      "Bash(dart test:*)"
     ],
     "deny": [],
     "ask": []

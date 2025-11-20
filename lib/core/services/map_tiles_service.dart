@@ -20,9 +20,29 @@ class MapTile {
   });
 
   factory MapTile.fromJson(Map<String, dynamic> json) {
+    final id = json['id'] as int;
+    final rawCoords = json['geometry']['coordinates'];
+
+    debugPrint('🏗️ Creating MapTile ID: $id');
+    debugPrint('📐 Raw coordinates type: ${rawCoords.runtimeType}');
+    debugPrint('📐 Raw coordinates: $rawCoords');
+
+    final coordinates = _parseCoordinates(rawCoords);
+
+    debugPrint('✅ Parsed ${coordinates.length} coordinate arrays');
+    if (coordinates.isNotEmpty) {
+      debugPrint('🔍 First coord array length: ${coordinates[0].length}');
+      if (coordinates[0].isNotEmpty) {
+        debugPrint('🔍 First ring length: ${coordinates[0][0].length}');
+        if (coordinates[0][0].isNotEmpty) {
+          debugPrint('🔍 First point: ${coordinates[0][0][0]}');
+        }
+      }
+    }
+
     return MapTile(
-      id: json['id'] as int,
-      coordinates: _parseCoordinates(json['geometry']['coordinates']),
+      id: id,
+      coordinates: coordinates,
       properties: json['properties'] as Map<String, dynamic>? ?? {},
     );
   }
@@ -62,38 +82,54 @@ class MapTile {
   // Get center point of the tile for map focusing
   LatLng getCenter() {
     if (coordinates.isEmpty || coordinates[0].isEmpty || coordinates[0][0].isEmpty) {
+      debugPrint('⚠️ Tile $id: Empty coordinates, returning (0,0)');
       return LatLng(0, 0);
     }
 
+    // For the parsed coordinate structure, we need coordinates[0][0] to get the ring with coordinate points
     final firstRing = coordinates[0][0];
     double totalLat = 0;
     double totalLng = 0;
     int count = 0;
 
+    debugPrint('🔍 Tile $id: Processing ${firstRing.length} coordinate points');
+
     for (final point in firstRing) {
-      totalLat += point[1]; // latitude
-      totalLng += point[0]; // longitude
+      // point is a List<double> containing [longitude, latitude]
+      final lng = point[0] as double; // longitude
+      final lat = point[1] as double; // latitude
+      totalLat += lat;
+      totalLng += lng;
       count++;
     }
 
-    return LatLng(totalLat / count, totalLng / count);
+    final centerLat = totalLat / count;
+    final centerLng = totalLng / count;
+    debugPrint('📍 Tile $id: Center calculated at ($centerLat, $centerLng)');
+
+    return LatLng(centerLat, centerLng);
   }
 
   // Get bounding box for the tile
   LatLngBounds getBounds() {
     if (coordinates.isEmpty || coordinates[0].isEmpty || coordinates[0][0].isEmpty) {
+      debugPrint('⚠️ Tile $id: Empty coordinates for bounds, returning (0,0)');
       return LatLngBounds(LatLng(0, 0), LatLng(0, 0));
     }
 
+    // For the parsed coordinate structure, we need coordinates[0][0] to get the ring with coordinate points
     final firstRing = coordinates[0][0];
-    double minLat = firstRing[0][1];
-    double maxLat = firstRing[0][1];
-    double minLng = firstRing[0][0];
-    double maxLng = firstRing[0][0];
+    final firstPoint = firstRing[0];
+    double minLat = firstPoint[1] as double; // latitude
+    double maxLat = firstPoint[1] as double; // latitude
+    double minLng = firstPoint[0] as double; // longitude
+    double maxLng = firstPoint[0] as double; // longitude
+
+    debugPrint('🔍 Tile $id: Initial bounds: lat[$minLat,$maxLat], lng[$minLng,$maxLng]');
 
     for (final point in firstRing) {
-      final lat = point[1];
-      final lng = point[0];
+      final lng = point[0] as double; // longitude
+      final lat = point[1] as double; // latitude
 
       if (lat < minLat) minLat = lat;
       if (lat > maxLat) maxLat = lat;
@@ -101,7 +137,10 @@ class MapTile {
       if (lng > maxLng) maxLng = lng;
     }
 
-    return LatLngBounds(LatLng(minLat, minLng), LatLng(maxLat, maxLng));
+    debugPrint('📐 Tile $id: Final bounds: lat[$minLat,$maxLat], lng[$minLng,$maxLng]');
+
+    // Fix: LatLngBounds expects (northWest, southEast) but we were passing (southWest, northEast)
+    return LatLngBounds(LatLng(maxLat, minLng), LatLng(minLat, maxLng));
   }
 
   MapTile copyWith({

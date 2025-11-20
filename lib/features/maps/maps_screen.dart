@@ -311,7 +311,8 @@ class _MapsScreenState extends State<MapsScreen> {
             _selectedTile = tile;
           });
           debugPrint('🗺️ Selected tile ID: ${tile.id}');
-          _showTileInfo(tile);
+          // Pass the raw feature data to modal to avoid coordinate parsing issues
+          _showTileInfo(tile, feature: feature);
           return;
         }
       }
@@ -453,13 +454,14 @@ class _MapsScreenState extends State<MapsScreen> {
     });
   }
 
-  void _showTileInfo(MapTile tile) {
+  void _showTileInfo(MapTile tile, {dynamic feature}) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (context) => _TileInfoSheet(
         tile: tile,
+        feature: feature,
         onSave: () => _saveTile(tile),
       ),
     );
@@ -679,10 +681,12 @@ class _MapsScreenState extends State<MapsScreen> {
 // Tile Information Modal Widget
 class _TileInfoSheet extends StatelessWidget {
   final MapTile tile;
+  final dynamic feature;
   final VoidCallback onSave;
 
   const _TileInfoSheet({
     required this.tile,
+    this.feature,
     required this.onSave,
   });
 
@@ -754,6 +758,34 @@ class _TileInfoSheet extends StatelessWidget {
           ),
           const SizedBox(height: 20),
 
+          // Tile Information
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Tile Information',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.grey[50],
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.grey[200]!),
+                  ),
+                  child: _buildLocationRow(Icons.grid_on, 'Tile ID', '#${tile.id}'),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 20),
+
           // Action Buttons
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -797,6 +829,102 @@ class _TileInfoSheet extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  Widget _buildLocationRow(IconData icon, String label, String value) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(icon, size: 16, color: Colors.grey[600]),
+        const SizedBox(width: 8),
+        Text(
+          '$label:',
+          style: TextStyle(
+            fontWeight: FontWeight.w600,
+            color: Colors.grey[700],
+            fontSize: 12,
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            value,
+            style: const TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  String _getBoundsString(LatLngBounds bounds) {
+    return '${bounds.south.toStringAsFixed(4)}, ${bounds.west.toStringAsFixed(4)} → ${bounds.north.toStringAsFixed(4)}, ${bounds.east.toStringAsFixed(4)}';
+  }
+
+  String _formatCoordinates(List<List<List<List<double>>>> coordinates) {
+    // If we have raw feature data, use it directly instead of parsed coordinates
+    if (feature != null && feature['geometry'] != null) {
+      try {
+        final rawCoords = feature['geometry']['coordinates'].toString();
+        debugPrint('🔍 Modal: Using raw feature coordinates for tile ${tile.id}: $rawCoords');
+
+        // Truncate if too long for display
+        if (rawCoords.length > 200) {
+          return '${rawCoords.substring(0, 197)}...]';
+        }
+        return rawCoords;
+      } catch (e) {
+        debugPrint('❌ Modal: Error formatting raw coordinates: $e');
+      }
+    }
+
+    // Fallback to parsed coordinates if no raw feature data
+    if (coordinates.isEmpty) {
+      return 'No coordinates available';
+    }
+
+    debugPrint('🔍 Modal: Using parsed coordinates for tile ${tile.id}');
+    debugPrint('🔍 Modal: Coordinates structure: ${coordinates.length} polygons');
+
+    try {
+      final coordsString = coordinates.map((polygon) {
+        return polygon.map((ring) {
+          return ring.map((point) {
+            return '[${point[0]}, ${point[1]}]';
+          }).toList();
+        }).toList();
+      }).toString();
+
+      // Truncate if too long for display
+      if (coordsString.length > 200) {
+        return '${coordsString.substring(0, 197)}...]';
+      }
+      return coordsString;
+    } catch (e) {
+      debugPrint('❌ Modal: Error formatting parsed coordinates: $e');
+      return 'Error formatting coordinates: $e';
+    }
+  }
+
+  String _formatProperties(Map<String, dynamic> properties) {
+    if (properties.isEmpty) {
+      return 'No properties';
+    }
+
+    try {
+      // Convert properties to JSON string for display
+      final propsString = properties.toString();
+
+      // Truncate if too long for display
+      if (propsString.length > 200) {
+        return '${propsString.substring(0, 197)}...]';
+      }
+      return propsString;
+    } catch (e) {
+      return 'Error formatting properties';
+    }
   }
 }
 

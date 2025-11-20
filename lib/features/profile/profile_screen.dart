@@ -1,6 +1,11 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
+import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart' as mb;
+import 'package:latlong2/latlong.dart';
+import '../../core/services/map_tiles_service.dart' as map_service;
 import '../../core/constants/app_constants.dart';
 import '../../core/theme/app_theme.dart';
 import '../auth/bloc/auth_bloc.dart';
@@ -84,7 +89,9 @@ class ProfileScreen extends StatelessWidget {
         builder: (context, state) {
           if (state is AuthAuthenticated) {
             return SingleChildScrollView(
-              padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+              padding: EdgeInsets.only(
+                bottom: MediaQuery.of(context).padding.bottom + 100,
+              ),
               child: Column(
                 children: [
                   // Profile Header
@@ -191,7 +198,7 @@ class ProfileScreen extends StatelessWidget {
                   ),
 
                   // Saved Items Section
-                  const SavedItemsSection(),
+                  SavedItemsSection(),
 
                   // Profile Options
                   Container(
@@ -446,6 +453,9 @@ class _SavedItemsSectionState extends State<SavedItemsSection> {
   List<Building> _savedBuildings = [];
   bool _isLoading = false;
 
+  // Raw GeoJSON data for tiles (like maps screen)
+  Map<String, dynamic> _rawTilesGeoJson = {};
+
   @override
   void initState() {
     super.initState();
@@ -454,18 +464,28 @@ class _SavedItemsSectionState extends State<SavedItemsSection> {
 
   // Show tile preview modal
   void _showTilePreview(BuildContext context, MapTile tile) {
+    // Find the raw feature data for this tile
+    dynamic rawFeature;
+    if (_rawTilesGeoJson.isNotEmpty) {
+      final features = _rawTilesGeoJson['features'] as List<dynamic>;
+      rawFeature = features.firstWhere(
+        (feature) => feature['properties']['id'] == tile.id,
+        orElse: () => null,
+      );
+    }
+
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (context) => Container(
+        height: MediaQuery.of(context).size.height * 0.7,
         margin: const EdgeInsets.all(16),
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(16),
         ),
         child: Column(
-          mainAxisSize: MainAxisSize.min,
           children: [
             // Handle bar
             Container(
@@ -479,7 +499,7 @@ class _SavedItemsSectionState extends State<SavedItemsSection> {
             ),
             const SizedBox(height: 16),
 
-            // Tile Title
+            // Tile Header
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20),
               child: Row(
@@ -522,61 +542,39 @@ class _SavedItemsSectionState extends State<SavedItemsSection> {
                 ],
               ),
             ),
-            const SizedBox(height: 20),
+            const SizedBox(height: 16),
 
-            // Tile Details
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'Location Details',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  _InfoRow(
-                    icon: Icons.location_on,
-                    label: 'Latitude',
-                    value: tile.getCenter().latitude.toStringAsFixed(6),
-                  ),
-                  const SizedBox(height: 4),
-                  _InfoRow(
-                    icon: Icons.location_on,
-                    label: 'Longitude',
-                    value: tile.getCenter().longitude.toStringAsFixed(6),
-                  ),
-                  const SizedBox(height: 16),
-                  const Text(
-                    'Tile Properties',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  if (tile.properties.isNotEmpty)
-                    ...tile.properties.entries.take(3).map((entry) => Padding(
-                      padding: const EdgeInsets.only(bottom: 4),
-                      child: _InfoRow(
-                        icon: Icons.info_outline,
-                        label: entry.key,
-                        value: entry.value?.toString() ?? 'N/A',
+            // Mapbox Preview
+            Expanded(
+              child: Container(
+                margin: const EdgeInsets.symmetric(horizontal: 20),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.grey[300]!),
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: mb.MapWidget(
+                    onMapCreated: (mb.MapboxMap mapboxMap) {
+                      // Add tile highlight layer using raw feature data
+                      _addTileHighlight(mapboxMap, rawFeature);
+                    },
+                    styleUri: 'mapbox://styles/mapbox/light-v11',
+                    cameraOptions: mb.CameraOptions(
+                      center: mb.Point(
+                        coordinates: mb.Position(
+                          _getTileCenter(rawFeature)?.longitude ?? 106.8,
+                          _getTileCenter(rawFeature)?.latitude ?? -6.2,
+                        ),
                       ),
-                    ))
-                  else
-                    const _InfoRow(
-                      icon: Icons.info_outline,
-                      label: 'Properties',
-                      value: 'No additional properties',
+                      zoom: 16.0, // Optimal zoom level for tile visibility
+                      pitch: 0.0,
                     ),
-                ],
+                  ),
+                ),
               ),
             ),
-            const SizedBox(height: 20),
+            const SizedBox(height: 16),
 
             // Action Buttons
             Padding(
@@ -600,7 +598,6 @@ class _SavedItemsSectionState extends State<SavedItemsSection> {
                     child: ElevatedButton.icon(
                       onPressed: () {
                         Navigator.pop(context);
-                        // Navigate to map with this tile selected
                         context.go('/maps?tileId=${tile.id}');
                       },
                       icon: const Icon(Icons.map),
@@ -622,6 +619,89 @@ class _SavedItemsSectionState extends State<SavedItemsSection> {
     );
   }
 
+  // Get tile center from raw feature data
+  LatLng? _getTileCenter(dynamic rawFeature) {
+    try {
+      if (rawFeature == null || rawFeature['geometry'] == null) {
+        return null;
+      }
+
+      final coordinates = rawFeature['geometry']['coordinates'];
+      if (coordinates is List && coordinates.isNotEmpty) {
+        final firstRing = coordinates[0] as List;
+        if (firstRing.isNotEmpty) {
+          double totalLat = 0;
+          double totalLng = 0;
+          int count = 0;
+
+          for (final point in firstRing) {
+            if (point is List && point.length >= 2) {
+              totalLng += (point[0] as num).toDouble(); // longitude
+              totalLat += (point[1] as num).toDouble(); // latitude
+              count++;
+            }
+          }
+
+          if (count > 0) {
+            return LatLng(totalLat / count, totalLng / count);
+          }
+        }
+      }
+      return null;
+    } catch (e) {
+      debugPrint('Error getting tile center: $e');
+      return null;
+    }
+  }
+
+  // Add tile highlight to map
+  void _addTileHighlight(mb.MapboxMap mapboxMap, dynamic rawFeature) {
+    try {
+      if (rawFeature == null || rawFeature['geometry'] == null) {
+        debugPrint('No valid feature data for tile highlight');
+        return;
+      }
+
+      // Create a GeoJSON source for the tile using raw feature data
+      final tileGeoJson = {
+        "type": "FeatureCollection",
+        "features": [rawFeature]
+      };
+
+      debugPrint('🗺️ Adding tile highlight for feature: ${rawFeature['properties']['id']}');
+
+      // Add source
+      final source = mb.GeoJsonSource(
+        id: "tile-highlight-source",
+        data: jsonEncode(tileGeoJson),
+      );
+      mapboxMap.style.addSource(source);
+
+      // Add fill layer - more prominent at higher zoom
+      final fillLayer = mb.FillLayer(
+        id: "tile-highlight-fill",
+        sourceId: "tile-highlight-source",
+        fillOpacity: 0.4, // Increased opacity for better visibility
+        fillColor: AppTheme.primaryColor.value,
+      );
+      mapboxMap.style.addLayer(fillLayer);
+
+      // Add outline layer - thicker at higher zoom
+      final outlineLayer = mb.LineLayer(
+        id: "tile-highlight-outline",
+        sourceId: "tile-highlight-source",
+        lineOpacity: 1.0,
+        lineColor: AppTheme.primaryColor.value,
+        lineWidth: 3.0, // Thicker line for better visibility at zoom 18
+      );
+      mapboxMap.style.addLayer(outlineLayer);
+
+      debugPrint('✅ Tile highlight added successfully');
+    } catch (e) {
+      debugPrint('❌ Error adding tile highlight: $e');
+    }
+  }
+
   // Show building preview modal
   void _showBuildingPreview(BuildContext context, Building building) {
     showModalBottomSheet(
@@ -634,183 +714,223 @@ class _SavedItemsSectionState extends State<SavedItemsSection> {
           color: Colors.white,
           borderRadius: BorderRadius.circular(16),
         ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // Handle bar
-            Container(
-              margin: const EdgeInsets.only(top: 12),
-              width: 40,
-              height: 4,
-              decoration: BoxDecoration(
-                color: Colors.grey[300],
-                borderRadius: BorderRadius.circular(2),
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Handle bar
+              Container(
+                margin: const EdgeInsets.only(top: 12),
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.grey[300],
+                  borderRadius: BorderRadius.circular(2),
+                ),
               ),
-            ),
-            const SizedBox(height: 16),
+              const SizedBox(height: 16),
 
-            // Building Title
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: AppTheme.accentColor.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: const Icon(
-                      Icons.location_city,
-                      color: AppTheme.accentColor,
-                      size: 24,
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Building #${building.id}',
-                          style: const TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        Text(
-                          'Saved Building',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Colors.green[600],
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 20),
-
-            // Building Details
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'Financial Information',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  _InfoRow(
-                    icon: Icons.attach_money,
-                    label: 'NJOP Value',
-                    value: building.formattedNjop,
-                  ),
-                  const SizedBox(height: 16),
-                  const Text(
-                    'Hazard Assessment',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  _InfoRow(
-                    icon: Icons.local_fire_department,
-                    label: 'Fire Hazard',
-                    value: building.fireHazard?.toStringAsFixed(2) ?? 'N/A',
-                  ),
-                  const SizedBox(height: 4),
-                  _InfoRow(
-                    icon: Icons.flood,
-                    label: 'Flood Hazard',
-                    value: building.floodHazard?.toStringAsFixed(2) ?? 'N/A',
-                  ),
-                  const SizedBox(height: 4),
-                  _InfoRow(
-                    icon: Icons.warning,
-                    label: 'Total Hazard',
-                    value: building.hazardSum?.toStringAsFixed(2) ?? 'N/A',
-                  ),
-                  const SizedBox(height: 16),
-                  const Text(
-                    'Location Details',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  _InfoRow(
-                    icon: Icons.location_on,
-                    label: 'Latitude',
-                    value: building.getCenter().latitude.toStringAsFixed(6),
-                  ),
-                  const SizedBox(height: 4),
-                  _InfoRow(
-                    icon: Icons.location_on,
-                    label: 'Longitude',
-                    value: building.getCenter().longitude.toStringAsFixed(6),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 20),
-
-            // Action Buttons
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      onPressed: () => Navigator.pop(context),
-                      icon: const Icon(Icons.close),
-                      label: const Text('Close'),
-                      style: OutlinedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        side: const BorderSide(color: Colors.grey),
+              // Building Title
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: AppTheme.accentColor.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: const Icon(
+                        Icons.location_city,
+                        color: AppTheme.accentColor,
+                        size: 24,
                       ),
                     ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    flex: 2,
-                    child: ElevatedButton.icon(
-                      onPressed: () {
-                        Navigator.pop(context);
-                        // Navigate to AR with this building
-                        context.go('/ar?buildingId=${building.id}');
-                      },
-                      icon: const Icon(Icons.view_in_ar),
-                      label: const Text('View in AR'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppTheme.accentColor,
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(vertical: 14),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Building #${building.id}',
+                            style: const TextStyle(
+                              fontSize: 20,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          Text(
+                            'Saved Building',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.green[600],
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
-            ),
-            const SizedBox(height: 20),
-          ],
+              const SizedBox(height: 20),
+
+              // Building Details
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Financial Information',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    _InfoRow(
+                      icon: Icons.attach_money,
+                      label: 'NJOP Value',
+                      value: building.formattedNjop,
+                    ),
+                    const SizedBox(height: 16),
+                    const Text(
+                      'Hazard Assessment',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    _InfoRow(
+                      icon: Icons.local_fire_department,
+                      label: 'Fire Hazard',
+                      value: building.fireHazard?.toStringAsFixed(2) ?? 'N/A',
+                    ),
+                    const SizedBox(height: 4),
+                    _InfoRow(
+                      icon: Icons.flood,
+                      label: 'Flood Hazard',
+                      value: building.floodHazard?.toStringAsFixed(2) ?? 'N/A',
+                    ),
+                    const SizedBox(height: 4),
+                    _InfoRow(
+                      icon: Icons.warning,
+                      label: 'Total Hazard',
+                      value: building.hazardSum?.toStringAsFixed(2) ?? 'N/A',
+                    ),
+                    const SizedBox(height: 16),
+                    const Text(
+                      'Location Details',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    _InfoRow(
+                      icon: Icons.my_location,
+                      label: 'Latitude',
+                      value: building.getCenter().latitude.toStringAsFixed(6),
+                    ),
+                    const SizedBox(height: 4),
+                    _InfoRow(
+                      icon: Icons.my_location,
+                      label: 'Longitude',
+                      value: building.getCenter().longitude.toStringAsFixed(6),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 20),
+
+              // Action Buttons
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: () => Navigator.pop(context),
+                        icon: const Icon(Icons.close),
+                        label: const Text('Close'),
+                        style: OutlinedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          side: const BorderSide(color: Colors.grey),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      flex: 2,
+                      child: ElevatedButton.icon(
+                        onPressed: () {
+                          Navigator.pop(context);
+                          context.go('/ar?buildingId=${building.id}');
+                        },
+                        icon: const Icon(Icons.view_in_ar),
+                        label: const Text('View in AR'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppTheme.accentColor,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 20),
+            ],
+          ),
         ),
       ),
     );
   }
 
+  // Helper methods for location details
+  String _getBoundsString(map_service.LatLngBounds bounds) {
+    return '${bounds.south.toStringAsFixed(4)}, ${bounds.west.toStringAsFixed(4)} → ${bounds.north.toStringAsFixed(4)}, ${bounds.east.toStringAsFixed(4)}';
+  }
+
+  String _calculateAreaDescription(map_service.LatLngBounds bounds) {
+    final latDiff = bounds.north - bounds.south;
+    final lngDiff = bounds.east - bounds.west;
+
+    if (latDiff < 0.001 && lngDiff < 0.001) {
+      return 'Very Small (< 0.001°²)';
+    } else if (latDiff < 0.01 && lngDiff < 0.01) {
+      return 'Small (~${(latDiff * lngDiff * 1000).toStringAsFixed(1)} units²)';
+    } else if (latDiff < 0.1 && lngDiff < 0.1) {
+      return 'Medium (~${(latDiff * lngDiff * 100).toStringAsFixed(1)} units²)';
+    } else {
+      return 'Large (~${(latDiff * lngDiff).toStringAsFixed(2)} units²)';
+    }
+  }
+
   Future<void> _loadSavedItems() async {
     setState(() => _isLoading = true);
     try {
+      // Load raw tiles GeoJSON data first
+      const String _baseUrl = String.fromEnvironment(
+        'API_BASE_URL',
+        defaultValue: 'https://pix2land-backend.vercel.app',
+      );
+
+      final response = await http.get(
+        Uri.parse('$_baseUrl/tiles'),
+        headers: {'Content-Type': 'application/json'},
+      );
+
+      if (response.statusCode == 200) {
+        final rawGeoJson = jsonDecode(response.body);
+        setState(() {
+          _rawTilesGeoJson = rawGeoJson;
+        });
+        print('✅ Loaded raw tiles GeoJSON with ${rawGeoJson['features'].length} tiles');
+      }
+
       // Get actual tiles and buildings from API
       final results = await Future.wait([
         MapTilesService().getTiles(),
@@ -1056,15 +1176,6 @@ class _SavedTileCard extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
               ),
               const SizedBox(height: 4),
-              Text(
-                'Center: ${tile.getCenter().latitude.toStringAsFixed(4)}, ${tile.getCenter().longitude.toStringAsFixed(4)}',
-                style: TextStyle(
-                  fontSize: 10,
-                  color: Colors.grey[600],
-                ),
-                overflow: TextOverflow.ellipsis,
-                maxLines: 2,
-              ),
               const Spacer(),
               // Saved Badge
               Container(
@@ -1139,17 +1250,17 @@ class _SavedBuildingCard extends StatelessWidget {
               Text(
                 'NJOP: ${building.formattedNjop}',
                 style: TextStyle(
-                  fontSize: 10,
+                  fontSize: 9,
                   color: Colors.grey[600],
                   fontWeight: FontWeight.w600,
                 ),
                 overflow: TextOverflow.ellipsis,
               ),
-              const SizedBox(height: 2),
+              const SizedBox(height: 1),
               Text(
-                'Fire: ${building.fireHazard?.toStringAsFixed(2) ?? 'N/A'}',
+                'Fire: ${building.fireHazard?.toStringAsFixed(1) ?? 'N/A'}',
                 style: const TextStyle(
-                  fontSize: 10,
+                  fontSize: 8,
                   color: Colors.orange,
                 ),
                 overflow: TextOverflow.ellipsis,
