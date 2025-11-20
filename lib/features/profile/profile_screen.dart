@@ -122,8 +122,8 @@ class ProfileScreen extends StatelessWidget {
                         ),
                         _StatCard(
                           icon: Icons.map,
-                          label: 'Surveys',
-                          value: '45',
+                          label: 'Sections',
+                          value: '2',
                           color: AppTheme.accentColor,
                         ),
                         _StatCard(
@@ -165,6 +165,14 @@ class ProfileScreen extends StatelessWidget {
                           title: 'My Projects',
                           onTap: () {
                             context.go(AppConstants.projectsRoute);
+                          },
+                        ),
+                        const Divider(height: 1),
+                        _ProfileOption(
+                          icon: Icons.map_outlined,
+                          title: 'Saved Map Sections',
+                          onTap: () {
+                            context.push('/saved-sections');
                           },
                         ),
                         const Divider(height: 1),
