@@ -1,0 +1,86 @@
+# Miscellaneous
+*.class
+*.log
+*.pyc
+*.swp
+.DS_Store
+.atom/
+.build/
+.buildlog/
+.history
+.svn/
+.swiftpm/
+migrate_working_dir/
+
+# IntelliJ related
+*.iml
+*.ipr
+*.iws
+.idea/
+
+# The .vscode folder contains launch configuration and tasks you configure in
+# VS Code which you may wish to be included in version control, so this line
+# is commented out by default.
+#.vscode/
+
+# Flutter/Dart/Pub related
+**/doc/api/
+**/ios/Flutter/.last_build_id
+.dart_tool/
+.flutter-plugins-dependencies
+.pub-cache/
+.pub/
+/build/
+/coverage/
+
+# Symbolication related
+app.*.symbols
+
+# Obfuscation related
+app.*.map.json
+
+# Android Studio will place build artifacts here
+/android/app/debug
+/android/app/profile
+/android/app/release
+
+# Unity generated files
+**/unityLibrary/build/
+**/unityLibrary/.cxx/
+**/unityLibrary/.gradle/
+**/unityLibrary/src/
+**/unityLibrary/**/symbols/
+**/il2cpp_*
+openjdk.jdk
+
+# Unity iOS build artifacts (should not be in version control)
+**/ios/Data/
+**/ios/Frameworks/UnityFramework.framework/
+**/ios/Libraries/*.a
+**/ios/build/
+**/ios/DerivedData/
+**/ios/Unity-iPhone.xcodeproj/project.xcworkspace/
+**/ios/Unity-iPhone.xcworkspace/
+**/ios/build_unity_framework.sh
+# Note: AAR files in libs/ are needed dependencies
+!**/libs/*.aar
+
+# Development keystores (contains sensitive debug certificates)
+debug.keystore
+*.keystore
+
+# Remove firebase_options.dart from gitignore as it's needed for the app
+# firebase_options.dart
+
+# Agora configuration (contains sensitive credentials)
+lib/core/config/agora_config.dart
+
+# Python files
+*.pyc
+__pycache__/
+*.py[cod]
+*$py.class
+nul
+
+# Icon generation script (helper only)
+generate_icon.py
