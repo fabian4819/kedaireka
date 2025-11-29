@@ -942,66 +942,7 @@ class _BuildingsMapScreenState extends State<BuildingsMapScreen> {
                   ),
                 ),
 
-                // **IMPORTANT VISUAL INSTRUCTIONS**
-                Positioned(
-                  bottom: 20,
-                  left: 20,
-                  child: Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: Colors.black.withOpacity(0.9),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: Colors.blue, width: 2),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Text(
-                          '🏗️ 3D BUILDINGS - Mapbox Standard',
-                          style: TextStyle(
-                            color: Colors.blue,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 14,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        const Text(
-                          '• Camera pitched to 45° for optimal 3D view',
-                          style: TextStyle(color: Colors.white, fontSize: 12),
-                        ),
-                        const Text(
-                          '• All buildings have consistent 30m height',
-                          style: TextStyle(color: Colors.white, fontSize: 12),
-                        ),
-                        Text(
-                          '• ${_getColorModeDisplayName()} coloring for buildings',
-                          style: TextStyle(
-                            color: _colorMode == 'default' ? Colors.blue : Colors.purple,
-                            fontSize: 12,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        const Text(
-                          '• Tap buildings to see details & save',
-                          style: TextStyle(color: Colors.cyan, fontSize: 12, fontWeight: FontWeight.bold),
-                        ),
-                        Text(
-                          _colorMode == 'default'
-                              ? '• Based on Mapbox Standard 3D documentation'
-                              : '• Gradient colors show data intensity',
-                          style: TextStyle(color: Colors.green, fontSize: 10),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          '• Processing ${_buildings.length} buildings with 3D extrusion',
-                          style: TextStyle(color: Colors.orange, fontSize: 12),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-
+  
                 // Color legend
                 _buildColorLegend(),
 
