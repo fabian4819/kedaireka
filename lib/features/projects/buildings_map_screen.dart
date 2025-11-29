@@ -1249,7 +1249,7 @@ class _BuildingsMapScreenState extends State<BuildingsMapScreen> {
           mainAxisSize: MainAxisSize.min,
           children: [
             Text(
-              '${_getColorModeDisplayName()} Range',
+              _colorMode == 'njop' ? 'NJOP' : '${_getColorModeDisplayName()}',
               style: const TextStyle(
                 color: Colors.white,
                 fontWeight: FontWeight.bold,
@@ -1257,16 +1257,40 @@ class _BuildingsMapScreenState extends State<BuildingsMapScreen> {
               ),
             ),
             const SizedBox(height: 8),
-            _buildGradientBar(),
-            const SizedBox(height: 4),
-            _buildRangeLabels(),
+            _buildLegendWithGradientAndValues(),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildGradientBar() {
+  Widget _buildLegendWithGradientAndValues() {
+    String mode = _colorMode == 'hazard' ? 'total' : _colorMode;
+    final range = _dataRanges[mode];
+
+    String lowValue, highValue;
+    if (range != null) {
+      final min = range['min'] as double;
+      final max = range['max'] as double;
+
+      switch (_colorMode) {
+        case 'njop':
+          lowValue = _formatNumber(min);
+          highValue = _formatNumber(max);
+          break;
+        case 'hazard':
+          lowValue = min.toStringAsFixed(3);
+          highValue = max.toStringAsFixed(3);
+          break;
+        default:
+          lowValue = min.toStringAsFixed(1);
+          highValue = max.toStringAsFixed(1);
+      }
+    } else {
+      lowValue = 'No data';
+      highValue = 'No data';
+    }
+
     List<Color> colors;
     switch (_colorMode) {
       case 'njop':
@@ -1276,65 +1300,85 @@ class _BuildingsMapScreenState extends State<BuildingsMapScreen> {
         colors = [const Color(0xFF00FF00), const Color(0xFFFFFFFF), const Color(0xFF800080)];
         break;
       default:
-        return const SizedBox.shrink();
-    }
-
-    return Container(
-      height: 20,
-      width: 120,
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(4),
-        gradient: LinearGradient(
-          colors: colors,
-          begin: Alignment.centerLeft,
-          end: Alignment.centerRight,
-        ),
-      ),
-    );
-  }
-
-  Widget _buildRangeLabels() {
-    String mode = _colorMode == 'hazard' ? 'total' : _colorMode;
-    final range = _dataRanges[mode];
-
-    if (range == null) {
-      return const Text(
-        'No data',
-        style: TextStyle(color: Colors.white, fontSize: 10),
-      );
-    }
-
-    final min = range['min'] as double;
-    final max = range['max'] as double;
-
-    String minLabel, maxLabel;
-    switch (_colorMode) {
-      case 'njop':
-        minLabel = min.toStringAsFixed(0);
-        maxLabel = max.toStringAsFixed(0);
-        break;
-      case 'hazard':
-        minLabel = min.toStringAsFixed(3);
-        maxLabel = max.toStringAsFixed(3);
-        break;
-      default:
-        minLabel = min.toStringAsFixed(1);
-        maxLabel = max.toStringAsFixed(1);
+        colors = [const Color(0xFF00FF00), const Color(0xFFFFFFFF), const Color(0xFFFF0000)];
     }
 
     return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          minLabel,
-          style: const TextStyle(color: Colors.white, fontSize: 10),
+        // Gradient bar on the left
+        Container(
+          height: 60,
+          width: 20,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(4),
+            gradient: LinearGradient(
+              colors: colors,
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+            ),
+          ),
         ),
-        Text(
-          maxLabel,
-          style: const TextStyle(color: Colors.white, fontSize: 10),
+        const SizedBox(width: 8),
+        // Values aligned with gradient positions on the right
+        SizedBox(
+          height: 60,
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                highValue,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 10,
+                ),
+              ),
+              Text(
+                'Mid',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 10,
+                ),
+              ),
+              Text(
+                lowValue,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 10,
+                ),
+              ),
+            ],
+          ),
         ),
       ],
     );
+  }
+
+  // Helper method to format numbers with scientific notation
+  String _formatNumber(double num) {
+    if (num == 0) return '0';
+
+    final absNum = num.abs();
+
+    // If number is less than 1000, show as is
+    if (absNum < 1000) {
+      return num.toStringAsFixed(0);
+    }
+
+    // Calculate exponent
+    int exponent = 0;
+    double mantissa = absNum;
+
+    while (mantissa >= 10) {
+      mantissa /= 10;
+      exponent++;
+    }
+
+    // Round mantissa to 2 decimal places for display
+    mantissa = double.parse(mantissa.toStringAsFixed(2));
+
+    return '${mantissa}×10³';
   }
 }
 
