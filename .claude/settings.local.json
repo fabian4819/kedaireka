@@ -53,7 +53,8 @@
       "Bash(git remote add:*)",
       "Bash(git rev-list:*)",
       "Bash(git cat-file:*)",
-      "Bash(r)"
+      "Bash(r)",
+      "WebFetch(domain:pix2land-backend.vercel.app)"
     ],
     "deny": [],
     "ask": []

@@ -28,7 +28,7 @@ class _BuildingsMapScreenState extends State<BuildingsMapScreen> {
   Position? _currentPosition;
   bool _isLoading = false;
   bool _isLoadingBuildings = false;
-  String _currentStyle = 'custom';
+  String _currentStyle = 'satellite';
   double _currentZoom = _initialZoom;
 
   // Buildings from backend
@@ -39,7 +39,7 @@ class _BuildingsMapScreenState extends State<BuildingsMapScreen> {
   bool _showBuildings = true;
 
   // Color gradient settings
-  String _colorMode = 'njop'; // 'njop', 'hazard', 'default'
+  String _colorMode = 'default'; // 'njop', 'hazard', 'default'
   Map<String, dynamic> _dataRanges = {};
   bool _showLegend = true;
 
@@ -74,25 +74,37 @@ class _BuildingsMapScreenState extends State<BuildingsMapScreen> {
         defaultValue: 'https://pix2land-backend.vercel.app',
       );
 
-      final response = await http.get(
+      // Load both buildings data and stats
+      final buildingsResponse = await http.get(
         Uri.parse('$_baseUrl/buildings'),
         headers: {'Content-Type': 'application/json'},
       );
 
-      if (response.statusCode == 200) {
-        final rawGeoJson = jsonDecode(response.body);
+      final statsResponse = await http.get(
+        Uri.parse('$_baseUrl/buildings/stats'),
+        headers: {'Content-Type': 'application/json'},
+      );
+
+      if (buildingsResponse.statusCode == 200 && statsResponse.statusCode == 200) {
+        final rawGeoJson = jsonDecode(buildingsResponse.body);
+        final statsData = jsonDecode(statsResponse.body);
+
         setState(() {
           _rawBuildingsGeoJson = rawGeoJson;
           _isLoadingBuildings = false;
         });
         debugPrint('🏗️ Buildings Map Screen: Loaded raw GeoJSON with ${rawGeoJson['features'].length} buildings');
+        debugPrint('🏗️ Buildings Map Screen: Stats data: $statsData');
 
+        // Parse stats data to set proper ranges
+        await _parseAndUpdateStatsData(statsData);
+
+        // Also load processed buildings for compatibility
         final buildings = await MapTilesService().getBuildings();
-        final stats = await MapTilesService().getBuildingStats();
         _buildings = buildings;
-        _buildingStats = stats;
+
       } else {
-        throw Exception('Failed to load buildings: ${response.statusCode}');
+        throw Exception('Failed to load buildings data: ${buildingsResponse.statusCode}, stats: ${statsResponse.statusCode}');
       }
     } catch (e) {
       setState(() => _isLoadingBuildings = false);
@@ -104,10 +116,85 @@ class _BuildingsMapScreenState extends State<BuildingsMapScreen> {
     }
   }
 
-  Future<void> _calculateDataRanges() async {
-    if (_buildings.isEmpty) return;
+  // Parse stats data and update ranges
+  Future<void> _parseAndUpdateStatsData(Map<String, dynamic> statsData) async {
+    try {
+      debugPrint('🏗️ Parsing stats data...');
 
-    debugPrint('🏗️ Calculating data ranges for gradient coloring...');
+      // Parse the stats ranges from API response
+      final floodHazardMin = (statsData['flood_hazard_min'] as num?)?.toDouble() ?? 0.0;
+      final floodHazardMax = (statsData['flood_hazard_max'] as num?)?.toDouble() ?? 1.0;
+
+      final fireHazardMin = (statsData['fire_hazard_min'] as num?)?.toDouble() ?? 0.0;
+      final fireHazardMax = (statsData['fire_hazard_max'] as num?)?.toDouble() ?? 1.0;
+
+      final hazardSumMin = (statsData['hazard_sum_min'] as num?)?.toDouble() ?? 0.0;
+      final hazardSumMax = (statsData['hazard_sum_max'] as num?)?.toDouble() ?? 1.0;
+
+      final njopTotalMin = _parseNjopValue(statsData['njop_total_min']);
+      final njopTotalMax = _parseNjopValue(statsData['njop_total_max']);
+
+      setState(() {
+        _dataRanges = {
+          'flood': {'min': floodHazardMin, 'max': floodHazardMax},
+          'fire': {'min': fireHazardMin, 'max': fireHazardMax},
+          'total': {'min': hazardSumMin, 'max': hazardSumMax},
+          'njop': {'min': njopTotalMin, 'max': njopTotalMax},
+        };
+      });
+
+      debugPrint('🏗️ Updated data ranges:');
+      debugPrint('  Flood: $floodHazardMin - $floodHazardMax');
+      debugPrint('  Fire: $fireHazardMin - $fireHazardMax');
+      debugPrint('  Total: $hazardSumMin - $hazardSumMax');
+      debugPrint('  NJOP: $njopTotalMin - $njopTotalMax');
+
+    } catch (e) {
+      debugPrint('❌ Error parsing stats data: $e');
+      // Fallback to calculated ranges
+      await _calculateDataRanges();
+    }
+  }
+
+  // Parse NJOP values that may be in string format like "1.5M" or "2.1T"
+  double _parseNjopValue(dynamic value) {
+    if (value == null) return 0.0;
+
+    if (value is num) {
+      return value.toDouble();
+    }
+
+    if (value is String) {
+      final upperValue = value.toUpperCase().trim();
+
+      if (upperValue.endsWith('K')) {
+        final numValue = double.tryParse(upperValue.replaceAll('K', '').trim()) ?? 0.0;
+        return numValue * 1000;
+      } else if (upperValue.endsWith('M')) {
+        final numValue = double.tryParse(upperValue.replaceAll('M', '').trim()) ?? 0.0;
+        return numValue * 1000000;
+      } else if (upperValue.endsWith('B')) {
+        final numValue = double.tryParse(upperValue.replaceAll('B', '').trim()) ?? 0.0;
+        return numValue * 1000000000;
+      } else if (upperValue.endsWith('T')) {
+        final numValue = double.tryParse(upperValue.replaceAll('T', '').trim()) ?? 0.0;
+        return numValue * 1000000000000;
+      } else {
+        return double.tryParse(upperValue) ?? 0.0;
+      }
+    }
+
+    return 0.0;
+  }
+
+  // Backup method to calculate data ranges from building data if API stats fails
+  Future<void> _calculateDataRanges() async {
+    if (_buildings.isEmpty) {
+      debugPrint('🏗️ No buildings available for range calculation');
+      return;
+    }
+
+    debugPrint('🏗️ Calculating data ranges from building data (fallback)...');
 
     // Calculate NJOP range
     final njopValues = _buildings.map((b) => b.njopTotal).where((v) => v != null && v! > 0).toList();
@@ -115,6 +202,10 @@ class _BuildingsMapScreenState extends State<BuildingsMapScreen> {
     if (njopValues.isNotEmpty) {
       njopMin = njopValues.reduce((a, b) => a! < b! ? a : b)!;
       njopMax = njopValues.reduce((a, b) => a! > b! ? a : b)!;
+    } else {
+      // Default range if no NJOP data found
+      njopMin = 1500000; // 1.5M
+      njopMax = 2100000000000; // 2.1T
     }
 
     // Calculate hazard ranges
@@ -126,18 +217,27 @@ class _BuildingsMapScreenState extends State<BuildingsMapScreen> {
     if (fireHazards.isNotEmpty) {
       fireMin = fireHazards.reduce((a, b) => a! < b! ? a : b)!;
       fireMax = fireHazards.reduce((a, b) => a! > b! ? a : b)!;
+    } else {
+      fireMin = 0.24915;
+      fireMax = 0.39737;
     }
 
     double floodMin = 0, floodMax = 0;
     if (floodHazards.isNotEmpty) {
       floodMin = floodHazards.reduce((a, b) => a! < b! ? a : b)!;
       floodMax = floodHazards.reduce((a, b) => a! > b! ? a : b)!;
+    } else {
+      floodMin = 0.0;
+      floodMax = 0.13899;
     }
 
     double totalMin = 0, totalMax = 0;
     if (totalHazards.isNotEmpty) {
       totalMin = totalHazards.reduce((a, b) => a! < b! ? a : b)!;
       totalMax = totalHazards.reduce((a, b) => a! > b! ? a : b)!;
+    } else {
+      totalMin = 0.25;
+      totalMax = 0.51;
     }
 
     setState(() {
@@ -149,7 +249,7 @@ class _BuildingsMapScreenState extends State<BuildingsMapScreen> {
       };
     });
 
-    debugPrint('🏗️ Data ranges calculated:');
+    debugPrint('🏗️ Data ranges calculated (fallback):');
     debugPrint('  NJOP: ${njopMin.toStringAsFixed(0)} - ${njopMax.toStringAsFixed(0)}');
     debugPrint('  Fire: ${fireMin.toStringAsFixed(3)} - ${fireMax.toStringAsFixed(3)}');
     debugPrint('  Flood: ${floodMin.toStringAsFixed(3)} - ${floodMax.toStringAsFixed(3)}');
@@ -163,7 +263,9 @@ class _BuildingsMapScreenState extends State<BuildingsMapScreen> {
 
     final min = range['min'] as double;
     final max = range['max'] as double;
-    final normalizedValue = (value - min) / (max - min).clamp(0.0, 1.0);
+    // Handle zero values properly - they should be treated as minimum
+    final adjustedValue = value == 0 ? min : value;
+    final normalizedValue = (adjustedValue - min) / (max - min).clamp(0.0001, 1.0);
 
     switch (mode) {
       case 'njop':
@@ -237,21 +339,99 @@ class _BuildingsMapScreenState extends State<BuildingsMapScreen> {
 
     switch (_colorMode) {
       case 'njop':
-        value = building.njopTotal?.toDouble();
+        // Get NJOP from properties using correct field name
+        final properties = building.properties;
+        final njopValue = properties['NJOP_TOTAL'];
+        if (njopValue != null) {
+          value = _parseNjopValueForGradient(njopValue);
+        } else {
+          value = 0.0;
+        }
         mode = 'njop';
+        debugPrint('🏗️ Building ${building.id}: NJOP value = $value');
         break;
       case 'hazard':
-        // Use total hazard as primary, could make this selectable later
-        value = building.hazardSum;
+        // Get hazard sum from properties using correct field name
+        final properties = building.properties;
+        final hazardValue = properties['hazard_sum'];
+        if (hazardValue != null) {
+          value = hazardValue is num ? hazardValue.toDouble() : double.tryParse(hazardValue.toString()) ?? 0.0;
+        } else {
+          value = 0.0;
+        }
         mode = 'total';
+        debugPrint('🏗️ Building ${building.id}: Hazard value = $value');
         break;
       default:
         return 0xFF3B82F6;
     }
 
-    if (value == null || value == 0) return 0xFF808080; // Gray for missing data
+    if (value == null || value == 0) {
+      // For NJOP and hazard modes, treat null/0 as low range (green)
+      return _getLowRangeColorForMode(_colorMode);
+    }
 
     return _getGradientColorForValue(value, mode);
+  }
+
+  // Parse NJOP value for gradient coloring (handles numeric and string formats)
+  double _parseNjopValueForGradient(dynamic value) {
+    if (value == null) return 0.0;
+
+    if (value is num) {
+      return value.toDouble();
+    }
+
+    if (value is String) {
+      final cleanValue = value.trim();
+      // Remove common separators
+      final processedValue = cleanValue.replaceAll(',', '').replaceAll(' ', '');
+
+      debugPrint('🏗️ Parsing NJOP string: "$cleanValue" to number');
+
+      final parsedValue = double.tryParse(processedValue) ?? 0.0;
+      debugPrint('🏗️ Parsed NJOP value: $parsedValue');
+
+      return parsedValue;
+    }
+
+    return 0.0;
+  }
+
+  // Get low range color based on mode
+  int _getLowRangeColorForMode(String mode) {
+    switch (mode) {
+      case 'njop':
+        return 0xFF00FF00; // Green for low NJOP
+      case 'hazard':
+        return 0xFF00FF00; // Green for low hazard
+      default:
+        return 0xFF3B82F6; // Blue default
+    }
+  }
+
+  // Get medium range color based on mode
+  int _getMediumRangeColorForMode(String mode) {
+    switch (mode) {
+      case 'njop':
+        return 0xFFFFFF00; // Yellow for medium NJOP
+      case 'hazard':
+        return 0xFFFFFF00; // Yellow for medium hazard
+      default:
+        return 0xFF3B82F6; // Blue default
+    }
+  }
+
+  // Get high range color based on mode
+  int _getHighRangeColorForMode(String mode) {
+    switch (mode) {
+      case 'njop':
+        return 0xFFFF0000; // Red for high NJOP
+      case 'hazard':
+        return 0xFF800080; // Purple for high hazard
+      default:
+        return 0xFF3B82F6; // Blue default
+    }
   }
 
   Future<void> _getCurrentLocation() async {
@@ -361,6 +541,9 @@ class _BuildingsMapScreenState extends State<BuildingsMapScreen> {
         final feature = features[i] as Map<String, dynamic>;
         final properties = Map<String, dynamic>.from(feature['properties'] as Map<String, dynamic>);
 
+        // Ensure essential properties exist to prevent hollow buildings
+        _ensureRequiredProperties(properties);
+
         // Create building object to calculate height and color
         final building = Building(
           id: properties['id'] as int? ?? i,
@@ -389,6 +572,40 @@ class _BuildingsMapScreenState extends State<BuildingsMapScreen> {
     } catch (e) {
       debugPrint('❌ Error processing GeoJSON with gradient colors: $e');
       return geoJson;
+    }
+  }
+
+  // Ensure required properties exist to prevent hollow buildings
+  void _ensureRequiredProperties(Map<String, dynamic> properties) {
+    debugPrint('🏗️ Ensuring properties for building ${properties['id']}: original properties = ${properties.keys.toList()}');
+
+    // Use the correct field names from the API
+    if (!properties.containsKey('NJOP_TOTAL')) {
+      debugPrint('🏗️ Building ${properties['id']}: Missing NJOP_TOTAL, checking alternatives');
+    }
+
+    // Check for any NJOP field with case-insensitive comparison
+    bool hasNjop = properties.keys.any((key) =>
+        key.toLowerCase().contains('njop') ||
+        key.toLowerCase().contains('property') && properties[key] != null
+    );
+
+    bool hasHazard = properties.keys.any((key) =>
+        key.toLowerCase().contains('hazard') ||
+        key.toLowerCase().contains('danger')
+    );
+
+    debugPrint('🏗️ Building ${properties['id']}: Has NJOP=$hasNjop, Has Hazard=$hasHazard');
+
+    // Set default values if missing (but don't override existing data)
+    if (!hasNjop && !properties.containsKey('NJOP_TOTAL')) {
+      properties['NJOP_TOTAL'] = 0;
+      debugPrint('🏗️ Set default NJOP_TOTAL=0 for building ${properties['id']}');
+    }
+
+    if (!hasHazard && !properties.containsKey('hazard_sum')) {
+      properties['hazard_sum'] = 0;
+      debugPrint('🏗️ Set default hazard_sum=0 for building ${properties['id']}');
     }
   }
 
@@ -569,22 +786,71 @@ class _BuildingsMapScreenState extends State<BuildingsMapScreen> {
         return [];
       }
 
-      // Use tap position to select different buildings
-      // Since we can't properly convert screen coordinates, use a pseudo-random but consistent approach
-      final tapHash = (coordinate.x + coordinate.y).hashCode;
-      final buildingIndex = tapHash.abs() % _buildings.length;
+      // Convert screen coordinate to geographic coordinates
+      final point = await _mapboxMap.coordinateForPixel(coordinate);
+      final tapLatLng = LatLng(point.coordinates.lat.toDouble(), point.coordinates.lng.toDouble());
 
-      debugPrint('🏗️ Selected building index: $buildingIndex from ${_buildings.length} buildings');
+      debugPrint('🏗️ Converted screen coordinates to: ${tapLatLng.latitude}, ${tapLatLng.longitude}');
 
-      final selectedBuilding = _buildings[buildingIndex];
-      debugPrint('🏗️ Selected building ID: ${selectedBuilding.id}');
+      // Find the building that contains the tapped point
+      for (final building in _buildings) {
+        if (_isPointInBuilding(tapLatLng, building)) {
+          debugPrint('🏗️ Found building ${building.id} at tapped location');
+          return [building];
+        }
+      }
 
-      return [selectedBuilding];
+      // If no exact match found, find the nearest building
+      if (_buildings.isNotEmpty) {
+        final nearestBuilding = _findNearestBuilding(tapLatLng);
+        debugPrint('🏗️ No exact match found, selecting nearest building: ${nearestBuilding.id}');
+        return [nearestBuilding];
+      }
+
+      debugPrint('🏗️ No buildings found at tapped location');
+      return [];
     } catch (e) {
       debugPrint('❌ Error querying features: $e');
       debugPrint('❌ Stack trace: ${StackTrace.current}');
       return [];
     }
+  }
+
+  // Check if a point is within a building's bounds
+  bool _isPointInBuilding(LatLng point, Building building) {
+    try {
+      final bounds = building.getBounds();
+      return point.latitude >= bounds.south &&
+             point.latitude <= bounds.north &&
+             point.longitude >= bounds.west &&
+             point.longitude <= bounds.east;
+    } catch (e) {
+      debugPrint('❌ Error checking if point is in building ${building.id}: $e');
+      return false;
+    }
+  }
+
+  // Find the nearest building to a given point
+  Building _findNearestBuilding(LatLng point) {
+    Building nearest = _buildings.first;
+    double minDistance = _calculateDistance(point, nearest.getCenter());
+
+    for (final building in _buildings.skip(1)) {
+      final distance = _calculateDistance(point, building.getCenter());
+      if (distance < minDistance) {
+        minDistance = distance;
+        nearest = building;
+      }
+    }
+
+    return nearest;
+  }
+
+  // Calculate distance between two points (simplified)
+  double _calculateDistance(LatLng point1, LatLng point2) {
+    final latDiff = point1.latitude - point2.latitude;
+    final lngDiff = point1.longitude - point2.longitude;
+    return (latDiff * latDiff + lngDiff * lngDiff).abs();
   }
 
   void _showBuildingInfoFromFeature(dynamic feature) {
@@ -782,29 +1048,97 @@ class _BuildingsMapScreenState extends State<BuildingsMapScreen> {
     debugPrint('🏗️ Buildings visibility: $_showBuildings');
   }
 
-  void _toggleMapType() {
-    String nextStyle;
-    switch (_currentStyle) {
-      case 'custom':
-        nextStyle = 'satellite';
-        break;
-      case 'satellite':
-        nextStyle = 'street';
-        break;
-      case 'street':
-        nextStyle = 'light';
-        break;
-      case 'light':
-        nextStyle = 'dark';
-        break;
-      case 'dark':
-      default:
-        nextStyle = 'custom';
-        break;
-    }
+  void _showColorModeSelector() {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('Pilih Mode Tampilan'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _buildModeOption('default', 'Default', Icons.color_lens, 'Semua bangunan dengan warna biru standar'),
+              _buildModeOption('njop', 'NJOP Value', Icons.attach_money, 'Bangunan berdasarkan nilai NJOP'),
+              _buildModeOption('hazard', 'Hazard Level', Icons.warning, 'Bangunan berdasarkan tingkat bahaya'),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildModeOption(String mode, String title, IconData icon, String description) {
+    final isSelected = _colorMode == mode;
+    return InkWell(
+      onTap: () {
+        Navigator.of(context).pop();
+        _changeColorMode(mode);
+      },
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        margin: const EdgeInsets.symmetric(vertical: 4),
+        decoration: BoxDecoration(
+          color: isSelected ? AppTheme.primaryColor.withOpacity(0.1) : Colors.transparent,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(
+            color: isSelected ? AppTheme.primaryColor : Colors.grey.shade300,
+            width: isSelected ? 2 : 1,
+          ),
+        ),
+        child: Row(
+          children: [
+            Icon(
+              icon,
+              color: isSelected ? AppTheme.primaryColor : Colors.grey.shade600,
+              size: 24,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: isSelected ? AppTheme.primaryColor : Colors.black87,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    description,
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.grey.shade600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            if (isSelected)
+              Icon(
+                Icons.check_circle,
+                color: AppTheme.primaryColor,
+                size: 20,
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _changeColorMode(String newMode) {
+    if (_colorMode == newMode) return;
+
+    debugPrint('🏗️ Changing color mode from $_colorMode to $newMode');
+
+    // Only change color mode, keep map intact
     setState(() {
-      _currentStyle = nextStyle;
+      _colorMode = newMode;
     });
+
+    // Rebuild only the building layers, not the entire map
+    _rebuildBuildingsLayer();
   }
 
   void _toggleColorMode() {
@@ -830,26 +1164,81 @@ class _BuildingsMapScreenState extends State<BuildingsMapScreen> {
     try {
       debugPrint('🏗️ Rebuilding buildings layer with color mode: $_colorMode');
 
-      // For simplicity, we'll just update the existing layers instead of removing and recreating them
-      // This avoids the removeLayer/removeSource API issues
-      debugPrint('🏗️ Color mode changed to $_colorMode - updating building colors');
+      // Only rebuild building layers, keep map and data intact
 
-      // We could update the layer properties here if the API supported it
-      // For now, we'll show a message to the user
+      // Ensure data is loaded
+      if (_rawBuildingsGeoJson.isEmpty) {
+        debugPrint('🏗️ No GeoJSON data available, loading first...');
+        await _loadBuildingsOnly();
+        return;
+      }
+
+      debugPrint('🏗️ Adding new building layers for $_colorMode mode...');
+
+      // Add new layers with current color mode (using unique IDs to avoid conflicts)
+      await _addBuildingLayersByValueRanges();
+
+      debugPrint('✅ Buildings layer rebuilt with color mode: $_colorMode');
+
+      // Show message to user
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Color mode changed to ${_getColorModeDisplayName()}'),
+            content: Text('Mode changed to ${_getColorModeDisplayName()}'),
             duration: const Duration(seconds: 2),
           ),
         );
       }
-
-      debugPrint('✅ Color mode updated to $_colorMode');
     } catch (e) {
-      debugPrint('❌ Error updating buildings layer: $e');
+      debugPrint('❌ Error rebuilding buildings layer: $e');
+      debugPrint('❌ Stack trace: ${StackTrace.current}');
     }
   }
+
+  // Note: Since Mapbox SDK doesn't support layer removal, we rely on unique IDs
+
+  // SIMPLIFIED LAYER RESET: Use unique IDs instead of removing layers
+  Future<void> _completelyResetAllBuildingLayers() async {
+    debugPrint('🏗️ SIMPLIFIED RESET: Using unique IDs instead of removing layers');
+    // Since Mapbox SDK doesn't support layer removal, we use unique IDs for each mode
+    // This prevents conflicts without needing to remove layers
+  }
+
+  // Simple cleanup method - just log since SDK doesn't support layer removal
+  void _toggleMapStyle() {
+    String nextStyle;
+    switch (_currentStyle) {
+      case 'custom':
+        nextStyle = 'satellite';
+        break;
+      case 'satellite':
+        nextStyle = 'street';
+        break;
+      case 'street':
+        nextStyle = 'light';
+        break;
+      case 'light':
+        nextStyle = 'dark';
+        break;
+      case 'dark':
+      default:
+        nextStyle = 'custom';
+        break;
+    }
+
+    debugPrint('🗺️ Changing map style from $_currentStyle to $nextStyle');
+
+    setState(() {
+      _currentStyle = nextStyle;
+    });
+  }
+
+  Future<void> _removeAllBuildingLayers() async {
+    debugPrint('🏗️ Note: Layer cleanup not supported by SDK, using unique layer IDs instead');
+  }
+
+  // Note: Mapbox SDK doesn't support layer removal, rely on unique layer IDs
+  // All layers are created without outlines (fillExtrusionBase: 0.0)
 
   String _getStyleUri() {
     switch (_currentStyle) {
@@ -876,36 +1265,17 @@ class _BuildingsMapScreenState extends State<BuildingsMapScreen> {
         automaticallyImplyLeading: false,
         backgroundColor: AppTheme.primaryColor,
         actions: [
-          IconButton(
-            icon: Icon(_showBuildings ? Icons.location_city : Icons.location_city_outlined),
-            onPressed: _toggleBuildings,
-            tooltip: _showBuildings ? 'Hide Buildings' : 'Show Buildings',
-          ),
+          // Icon 1: Mode Tampilan (Default/NJOP/Hazard)
           IconButton(
             icon: Icon(_getColorModeIcon()),
-            onPressed: _toggleColorMode,
-            tooltip: 'Toggle Color Mode',
+            onPressed: _showColorModeSelector,
+            tooltip: 'Pilih Mode Tampilan',
           ),
+          // Icon 2: Map Style (Satellite/Street/Light/Dark)
           IconButton(
-            icon: Icon(_showLegend ? Icons.palette : Icons.palette_outlined),
-            onPressed: _toggleLegend,
-            tooltip: _showLegend ? 'Hide Legend' : 'Show Legend',
-          ),
-          if (_buildingAreaCenter != null)
-            IconButton(
-              icon: const Icon(Icons.center_focus_strong),
-              onPressed: () => _refocusOnBuildings(),
-              tooltip: 'Focus on Buildings Area',
-            ),
-          IconButton(
-            icon: const Icon(Icons.layers),
-            onPressed: _toggleMapType,
-            tooltip: 'Change Map Style',
-          ),
-          IconButton(
-            icon: const Icon(Icons.clear_all),
-            onPressed: _clearSelection,
-            tooltip: 'Clear Selection',
+            icon: const Icon(Icons.map),
+            onPressed: _toggleMapStyle,
+            tooltip: 'Ganti Map Style',
           ),
         ],
       ),
@@ -923,7 +1293,7 @@ class _BuildingsMapScreenState extends State<BuildingsMapScreen> {
           : Stack(
               children: [
                 mb.MapWidget(
-                  key: ValueKey('3d_buildings_map_$_currentStyle'),
+                  key: ValueKey('3d_buildings_map_$_currentStyle-$_colorMode'),
                   onMapCreated: _onMapCreated,
                   styleUri: _getStyleUri(),
                   onTapListener: (context) {
@@ -1004,30 +1374,89 @@ class _BuildingsMapScreenState extends State<BuildingsMapScreen> {
   Future<void> _addBuildingLayersByValueRanges() async {
     try {
       debugPrint('🏗️ Creating building layers based on ${_colorMode} color mode...');
-
-      // Remove existing layers if any (commented out as removeLayer is not available in current SDK)
-      // try {
-      //   await _mapboxMap.style.removeLayer('buildings-3d-low');
-      //   await _mapboxMap.style.removeLayer('buildings-3d-medium');
-      //   await _mapboxMap.style.removeLayer('buildings-3d-high');
-      // } catch (e) {
-      //   // Layers don't exist yet, that's fine
-      // }
+      debugPrint('🏗️ Raw buildings data available: ${_rawBuildingsGeoJson['features']?.length ?? 0} buildings');
 
       if (_colorMode == 'default') {
-        // Default mode: single blue layer
+        // Default mode: single blue layer with ALL buildings
         await _addSingleBuildingLayer(0xFF3B82F6);
         return;
       }
 
-      // Calculate value ranges for the current mode
-      final mode = _colorMode == 'hazard' ? 'total' : _colorMode;
+      // For NJOP and Hazard modes, ensure ALL buildings are displayed
+      debugPrint('🏗️ Processing ${_colorMode} mode - ensuring all buildings are included');
+
+      // Add ALL buildings to a single layer for NJOP and Hazard modes
+      await _addSingleBuildingLayerWithGradientColors();
+
+      debugPrint('✅ Created gradient building layer for $_colorMode mode with ALL buildings');
+    } catch (e) {
+      debugPrint('❌ Error creating building layers: $e');
+      debugPrint('❌ Stack trace: ${StackTrace.current}');
+
+      // Fallback: try to add a simple layer
+      try {
+        await _addSingleBuildingLayer(0xFF3B82F6);
+        debugPrint('✅ Added fallback layer');
+      } catch (fallbackError) {
+        debugPrint('❌ Even fallback layer failed: $fallbackError');
+      }
+    }
+  }
+
+  // Add a single layer with gradient colors for NJOP and Hazard modes
+  Future<void> _addSingleBuildingLayerWithGradientColors() async {
+    try {
+      debugPrint('🏗️ Adding single gradient layer for $_colorMode mode...');
+
+      // Process GeoJSON with proper colors for current mode
+      final processedGeoJson = _processGeoJsonWithGradientColors(_rawBuildingsGeoJson);
+
+      // Add source for all buildings with processed colors
+      final buildingSource = mb.GeoJsonSource(
+        id: "buildings-gradient-source-$_colorMode",
+        data: jsonEncode(processedGeoJson),
+      );
+      await _mapboxMap.style.addSource(buildingSource);
+      debugPrint('✅ Added gradient source for $_colorMode mode');
+
+      // Create layers based on data ranges for better gradient effect
+      if (_colorMode == 'default') {
+        // Default: single blue layer without outline
+        final defaultLayer = mb.FillExtrusionLayer(
+          id: "buildings-default-layer-$_colorMode",
+          sourceId: "buildings-gradient-source-$_colorMode",
+          fillExtrusionOpacity: 0.8,
+          fillExtrusionHeight: 30.0,
+          fillExtrusionBase: 0.0, // No outline - starts from ground level
+          fillExtrusionColor: 0xFF3B82F6,
+        );
+        await _mapboxMap.style.addLayer(defaultLayer);
+      } else {
+        // NJOP/Hazard: Create multiple layers for gradient effect
+        await _createGradientLayersForMode();
+      }
+
+      debugPrint('✅ Added gradient layers for $_colorMode mode');
+
+    } catch (e) {
+      debugPrint('❌ Error adding gradient layer: $e');
+      rethrow;
+    }
+  }
+
+  // Create multiple layers for gradient effect based on data ranges
+  Future<void> _createGradientLayersForMode() async {
+    try {
+      debugPrint('🏗️ Creating gradient layers for $_colorMode mode...');
+
+      String mode = _colorMode == 'hazard' ? 'total' : _colorMode;
       final range = _dataRanges[mode];
 
       if (range == null || range['max'] == 0) {
         debugPrint('⚠️ No data range available for mode: $_colorMode');
-        await _addSingleBuildingLayer(0xFF3B82F6);
-        return;
+        debugPrint('🏗️ Available ranges: $_dataRanges');
+
+        debugPrint('🏗️ Using available range data for $_colorMode mode');
       }
 
       final min = range['min'] as double;
@@ -1036,43 +1465,48 @@ class _BuildingsMapScreenState extends State<BuildingsMapScreen> {
 
       if (rangeSize <= 0) {
         debugPrint('⚠️ Invalid range size for mode: $_colorMode');
-        await _addSingleBuildingLayer(0xFF3B82F6);
+        await _addSingleBuildingLayer(_getLowRangeColorForMode(_colorMode));
         return;
       }
 
-      // Divide into 3 layers: low (0-33%), medium (33-67%), high (67-100%)
-      final lowThreshold = min + (rangeSize * 0.33);
-      final highThreshold = min + (rangeSize * 0.67);
+      // Calculate thresholds for gradient - adjusted for actual data distribution
+      final lowThreshold = min + (rangeSize * 0.25);  // 25% for low
+      final mediumThreshold = min + (rangeSize * 0.75); // 75% for medium
 
-      // Filter buildings for each range and create separate GeoJSON sources and layers
+      debugPrint('🏗️ Creating gradient layers for $_colorMode mode:');
+      debugPrint('  Range: $min - $max');
+      debugPrint('  Low range: 0 - $lowThreshold');
+      debugPrint('  Medium range: $lowThreshold - $mediumThreshold');
+      debugPrint('  High range: $mediumThreshold - ∞');
+
+      // Create filtered layers for each range
       await _createBuildingLayerForRange(
-        'buildings-3d-low',
+        'buildings-3d-low-$_colorMode',
         0.0,
         lowThreshold,
-        _getLowRangeColor(),
+        _getLowRangeColorForMode(_colorMode),
         _rawBuildingsGeoJson,
       );
 
       await _createBuildingLayerForRange(
-        'buildings-3d-medium',
+        'buildings-3d-medium-$_colorMode',
         lowThreshold,
-        highThreshold,
-        _getMediumRangeColor(),
+        mediumThreshold,
+        _getMediumRangeColorForMode(_colorMode),
         _rawBuildingsGeoJson,
       );
 
       await _createBuildingLayerForRange(
-        'buildings-3d-high',
-        highThreshold,
+        'buildings-3d-high-$_colorMode',
+        mediumThreshold,
         double.infinity,
-        _getHighRangeColor(),
+        _getHighRangeColorForMode(_colorMode),
         _rawBuildingsGeoJson,
       );
 
-      debugPrint('✅ Created 3 building layers for $_colorMode mode');
     } catch (e) {
-      debugPrint('❌ Error creating building layers: $e');
-      debugPrint('❌ Stack trace: ${StackTrace.current}');
+      debugPrint('❌ Error creating gradient layers: $e');
+      rethrow;
     }
   }
 
@@ -1095,28 +1529,64 @@ class _BuildingsMapScreenState extends State<BuildingsMapScreen> {
         dynamic value = 0;
 
         if (mode == 'njop') {
-          // Use the same property name as Building class
-          value = properties['NJOP_TOTAL'] ?? properties['njop_total'];
+          // Check all possible NJOP field names
+          value = properties['NJOP_TOTAL'] ??
+                  properties['njop_total'] ??
+                  properties['njopTotal'] ??
+                  properties['njop'] ??
+                  0;
+
+          debugPrint('🏗️ Processing building ${properties['id']} for NJOP: raw value = $value');
+
           if (value is String) {
             // Remove 'B' and convert to double, then multiply by 1,000,000,000 for actual value
             final cleanedValue = value.replaceAll('B', '').replaceAll(',', '').trim();
             value = double.tryParse(cleanedValue) ?? 0.0;
             value = value * 1000000000; // Convert from billions to actual number
+            debugPrint('🏗️ Converted NJOP string "$value" to ${value}');
           } else if (value != null) {
             // Already a number, ensure it's in the right format
             value = value is int ? value.toDouble() : value;
+            debugPrint('🏗️ NJOP numeric value: $value');
           }
         } else if (mode == 'total') {
-          value = properties['hazard_sum'];
+          // Check all possible hazard field names
+          value = properties['hazard_sum'] ??
+                  properties['hazardSum'] ??
+                  properties['total_hazard'] ??
+                  properties['totalHazard'] ??
+                  0;
+
+          debugPrint('🏗️ Processing building ${properties['id']} for hazard: raw value = $value');
+
           if (value is String) {
             value = double.tryParse(value.replaceAll(',', '').trim()) ?? 0.0;
+            debugPrint('🏗️ Converted hazard string "$value" to $value');
           } else if (value != null) {
             value = value is int ? value.toDouble() : value;
+            debugPrint('🏗️ Hazard numeric value: $value');
           }
         }
 
-        if (value != null && value >= minValue && (maxValue == double.infinity || value <= maxValue)) {
+        // Ensure value is a number and not null
+        if (value == null) {
+          value = 0.0;
+        }
+
+        debugPrint('🏗️ Building ${properties['id']}: final value = $value, range = [$minValue, $maxValue]');
+
+        // Include buildings with valid data in appropriate ranges
+        if (value >= minValue && (maxValue == double.infinity || value <= maxValue)) {
           filteredFeatures.add(feature);
+          debugPrint('🏗️ Building ${properties['id']} added to $layerId (value in range)');
+        } else if (value == 0) {
+          // Add zero-value buildings to the lowest range
+          if (layerId.contains('low')) {
+            filteredFeatures.add(feature);
+            debugPrint('🏗️ Building ${properties['id']} added to $layerId (zero value)');
+          }
+        } else {
+          debugPrint('🏗️ Building ${properties['id']} NOT added to $layerId (value $value outside range)');
         }
       }
 
@@ -1130,20 +1600,21 @@ class _BuildingsMapScreenState extends State<BuildingsMapScreen> {
         'features': filteredFeatures,
       };
 
-      // Add source for this layer
+      // Add source for this layer with unique ID
+      final uniqueLayerId = '${layerId}-$_colorMode';
       final buildingSource = mb.GeoJsonSource(
-        id: '${layerId}-source',
+        id: '${uniqueLayerId}-source',
         data: jsonEncode(filteredGeoJson),
       );
       await _mapboxMap.style.addSource(buildingSource);
 
-      // Add 3D layer for this range
+      // Add 3D layer for this range with unique ID
       final extrusionLayer = mb.FillExtrusionLayer(
-        id: layerId,
-        sourceId: '${layerId}-source',
+        id: uniqueLayerId,
+        sourceId: '${uniqueLayerId}-source',
         fillExtrusionOpacity: 0.8,
         fillExtrusionHeight: 30.0,
-        fillExtrusionBase: 0.0,
+        fillExtrusionBase: 0.0, // No outline - buildings start from ground level
         fillExtrusionColor: color,
       );
       await _mapboxMap.style.addLayer(extrusionLayer);
@@ -1155,18 +1626,113 @@ class _BuildingsMapScreenState extends State<BuildingsMapScreen> {
 
   Future<void> _addSingleBuildingLayer(int color) async {
     try {
+      final uniqueLayerId = "buildings-3d-single-$_colorMode";
       final singleLayer = mb.FillExtrusionLayer(
-        id: "buildings-3d-single",
+        id: uniqueLayerId,
         sourceId: "buildings-source",
         fillExtrusionOpacity: 0.8,
         fillExtrusionHeight: 30.0,
-        fillExtrusionBase: 0.0,
+        fillExtrusionBase: 0.0, // No outline - buildings start from ground level
         fillExtrusionColor: color,
       );
       await _mapboxMap.style.addLayer(singleLayer);
-      debugPrint('✅ Single building layer added with color: $color');
+      debugPrint('✅ Single building layer added with color: $color for $_colorMode mode');
     } catch (e) {
       debugPrint('❌ Error adding single building layer: $e');
+    }
+  }
+
+  // Create layer for buildings with no data
+  Future<void> _createNoDataLayer() async {
+    try {
+      debugPrint('🏗️ Creating no-data layer...');
+
+      final features = _rawBuildingsGeoJson['features'] as List<dynamic>;
+      final noDataFeatures = <dynamic>[];
+      String mode = _colorMode == 'hazard' ? 'total' : _colorMode;
+
+      // Find buildings with no data for current mode
+      for (final feature in features) {
+        final properties = feature['properties'] as Map<String, dynamic>;
+        bool hasData = false;
+
+        if (mode == 'njop') {
+          // Check all possible NJOP field names
+          final njopValue = properties['NJOP_TOTAL'] ??
+                          properties['njop_total'] ??
+                          properties['njopTotal'] ??
+                          properties['njop'];
+
+          debugPrint('🏗️ Building ${properties['id']}: NJOP value = $njopValue');
+
+          if (njopValue != null) {
+            // Handle string values (like "1.23B")
+            String valueStr = njopValue.toString().toLowerCase().trim();
+            hasData = valueStr != '' &&
+                     valueStr != 'null' &&
+                     valueStr != '0' &&
+                     valueStr != '0.0' &&
+                     !valueStr.startsWith('0b'); // Exclude zero-based values
+          }
+        } else if (mode == 'total') {
+          // Check all possible hazard field names
+          final hazardValue = properties['hazard_sum'] ??
+                             properties['hazardSum'] ??
+                             properties['total_hazard'] ??
+                             properties['totalHazard'];
+
+          debugPrint('🏗️ Building ${properties['id']}: Hazard value = $hazardValue');
+
+          if (hazardValue != null) {
+            // Handle string or numeric values
+            String valueStr = hazardValue.toString().trim();
+            hasData = valueStr != '' &&
+                     valueStr != 'null' &&
+                     valueStr != '0' &&
+                     valueStr != '0.0';
+          }
+        }
+
+        if (!hasData) {
+          debugPrint('🏗️ Building ${properties['id']} has no data for $mode mode');
+          noDataFeatures.add(feature);
+        }
+      }
+
+      debugPrint('🏗️ Found ${noDataFeatures.length} buildings with no data for $mode mode');
+
+      if (noDataFeatures.isEmpty) {
+        debugPrint('🏗️ No no-data buildings to display');
+        return;
+      }
+
+      // Create GeoJSON for no-data buildings
+      final noDataGeoJson = {
+        'type': 'FeatureCollection',
+        'features': noDataFeatures,
+      };
+
+      // Add source for no-data buildings with unique ID
+      final noDataSource = mb.GeoJsonSource(
+        id: 'buildings-no-data-source-$_colorMode',
+        data: jsonEncode(noDataGeoJson),
+      );
+      await _mapboxMap.style.addSource(noDataSource);
+
+      // Add layer for no-data buildings (gray color) with unique ID
+      final noDataLayer = mb.FillExtrusionLayer(
+        id: 'buildings-no-data-layer-$_colorMode',
+        sourceId: 'buildings-no-data-source-$_colorMode',
+        fillExtrusionOpacity: 0.8,
+        fillExtrusionHeight: 30.0,
+        fillExtrusionBase: 0.0,
+        fillExtrusionColor: 0xFF808080, // Gray color for no data
+      );
+      await _mapboxMap.style.addLayer(noDataLayer);
+
+      debugPrint('✅ No-data layer added with ${noDataFeatures.length} buildings');
+    } catch (e) {
+      debugPrint('❌ Error creating no-data layer: $e');
     }
   }
 
