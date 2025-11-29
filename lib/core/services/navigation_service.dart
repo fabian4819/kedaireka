@@ -1,5 +1,5 @@
 import 'package:go_router/go_router.dart';
-import '../../features/splash/splash_screen.dart';
+import '../../features/splash/splash_screen.dart';  
 import '../../features/auth/login_screen.dart';
 import '../../features/auth/register_screen.dart';
 import '../../features/auth/email_verification_screen.dart';

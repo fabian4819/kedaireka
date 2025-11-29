@@ -874,7 +874,7 @@ class _BuildingsMapScreenState extends State<BuildingsMapScreen> {
       appBar: AppBar(
         title: Text('3D Buildings - ${_getColorModeDisplayName()}', style: const TextStyle(color: Colors.white)),
         automaticallyImplyLeading: false,
-        backgroundColor: Colors.blue[800],
+        backgroundColor: AppTheme.primaryColor,
         actions: [
           IconButton(
             icon: Icon(_showBuildings ? Icons.location_city : Icons.location_city_outlined),

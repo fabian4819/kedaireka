@@ -52,7 +52,8 @@
       "Bash(git filter-branch:*)",
       "Bash(git remote add:*)",
       "Bash(git rev-list:*)",
-      "Bash(git cat-file:*)"
+      "Bash(git cat-file:*)",
+      "Bash(r)"
     ],
     "deny": [],
     "ask": []
