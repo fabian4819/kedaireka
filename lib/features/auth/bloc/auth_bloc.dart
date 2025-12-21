@@ -51,24 +51,13 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     AppLogger.bloc('AuthInitialized triggered. User: ${user?.email}, Current state: $state');
 
     if (user != null) {
-      // Check if email is verified for email users
-      // For backend auth, we need to check the backend data
-      if (_authService.authProvider == 'email' && !_authService.isEmailVerified) {
-        // Don't authenticate if email is not verified
-        if (state is AuthLoading || state is AuthInitial || state is AuthUnauthenticated) {
-          AppLogger.bloc('Emitting AuthEmailNotVerified');
-          emit(AuthEmailNotVerified(user: user));
-        } else {
-          AppLogger.bloc('Skipping emit, already in state: $state');
-        }
+      // Skip email verification check - allow login without verification
+      // Only emit if not already authenticated with the same user
+      if (state is! AuthAuthenticated || (state as AuthAuthenticated).user.uid != user.uid) {
+        AppLogger.bloc('Emitting AuthAuthenticated');
+        emit(AuthAuthenticated(user: user));
       } else {
-        // Only emit if not already authenticated with the same user
-        if (state is! AuthAuthenticated || (state as AuthAuthenticated).user.uid != user.uid) {
-          AppLogger.bloc('Emitting AuthAuthenticated');
-          emit(AuthAuthenticated(user: user));
-        } else {
-          AppLogger.bloc('Already authenticated with same user, skipping emit');
-        }
+        AppLogger.bloc('Already authenticated with same user, skipping emit');
       }
     } else {
       // Try to initialize the backend service to check for existing session
@@ -129,16 +118,11 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     try {
       await _authService.registerWithEmailAndPassword(event.name, event.email, event.password);
       AppLogger.auth('Registration successful for: ${event.email}');
-      // After registration, check if user needs email verification
+      // Keep user logged in and go to home screen
       final user = _authService.currentUser;
       if (user != null) {
-        if (_authService.authProvider == 'email' && !_authService.isEmailVerified) {
-          AppLogger.auth('Email verification required for: ${event.email}');
-          emit(AuthEmailVerificationSent(user: user));
-        } else {
-          AppLogger.auth('User authenticated after registration: ${event.email}');
-          emit(AuthAuthenticated(user: user));
-        }
+        AppLogger.auth('User authenticated after registration: ${event.email}');
+        emit(AuthAuthenticated(user: user));
       }
     } catch (e, stackTrace) {
       AppLogger.auth('Registration failed for: ${event.email}', error: e, stackTrace: stackTrace);

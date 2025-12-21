@@ -258,7 +258,7 @@ class Building {
 
   // Get NJOP value from properties
   double? get njopTotal {
-    final value = properties['NJOP_TOTAL'];
+    final value = properties['njop_total'];
     if (value == null) return null;
 
     if (value is String) {
@@ -294,6 +294,10 @@ class Building {
   double? get fireHazard => properties['fire_hazar']?.toDouble();
   double? get floodHazard => properties['flood_haza']?.toDouble();
   double? get hazardSum => properties['hazard_sum']?.toDouble();
+
+  // Get zone code text (kodszntext)
+  String? get kodszntext => properties['kodszntext'] as String?;
+
 
   // Calculate extrusion height based on NJOP value (property tax)
   double calculateExtrusionHeight({double minHeight = 15.0, double maxHeight = 50.0}) {

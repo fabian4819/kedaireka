@@ -9,15 +9,23 @@
       "client_info": {
         "mobilesdk_app_id": "1:433420738342:android:f740cfd4a650484c9eebe7",
         "android_client_info": {
-          "package_name": "com.kedaireka.geoclarity"
+          "package_name": "com.example.kedaireka"
         }
       },
       "oauth_client": [
         {
+          "client_id": "433420738342-4jltfdd1l6jqnivs6suivol2gkpetshc.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.kedaireka",
+            "certificate_hash": "4e280c5a7294193e93fb02ce43486b7b1594c838"
+          }
+        },
+        {
           "client_id": "433420738342-fq1pbb8shro0us1n4p7e4ek3lj5k8rd2.apps.googleusercontent.com",
           "client_type": 1,
           "android_info": {
-            "package_name": "com.kedaireka.geoclarity",
+            "package_name": "com.example.kedaireka",
             "certificate_hash": "bedd2fc0ee11cee8caf4591cf4e1e28def92ae96"
           }
         },
@@ -42,7 +50,43 @@
               "client_id": "433420738342-uf3hgs22qgjg116o0emje0dghnbnb7gg.apps.googleusercontent.com",
               "client_type": 2,
               "ios_info": {
-                "bundle_id": "com.kedaireka.geoclarity"
+                "bundle_id": "com.example.kedaireka"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:433420738342:android:5c0a894b734a19db9eebe7",
+        "android_client_info": {
+          "package_name": "com.kedaireka.geoclarity"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "433420738342-6osj0j2s26a07g36a3jn9iptbj81jj0b.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyA0waVWsi8v7GKK7311b0JScJg-wwd3nr8"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "433420738342-6osj0j2s26a07g36a3jn9iptbj81jj0b.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "433420738342-uf3hgs22qgjg116o0emje0dghnbnb7gg.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.kedaireka"
               }
             }
           ]

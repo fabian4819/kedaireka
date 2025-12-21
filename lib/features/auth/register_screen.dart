@@ -79,9 +79,16 @@ class _RegisterScreenState extends State<RegisterScreen> {
       listener: (context, state) {
         if (state is AuthAuthenticated) {
           context.go(AppConstants.homeRoute);
-        } else if (state is AuthEmailVerificationSent) {
-          // Navigate to email verification screen after registration
-          context.go(AppConstants.emailVerificationRoute);
+        } else if (state is AuthRegistrationSuccess) {
+          // Show success message and redirect to login
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Registration successful! Please login with your credentials.'),
+              backgroundColor: Colors.green,
+              duration: Duration(seconds: 3),
+            ),
+          );
+          context.go('/login');
         } else if (state is AuthError) {
           String message = state.message;
           Color backgroundColor = Colors.red;
@@ -128,7 +135,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         height: 100,
                         padding: const EdgeInsets.all(8),
                         child: Image.asset(
-                          'assets/logos/logo-pix2land.png',
+                          'assets/logos/PIX2LAND.png',
                           fit: BoxFit.contain,
                         ),
                       ),
@@ -280,6 +287,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
                       const SizedBox(height: 16),
 
+                      // Google Sign-In temporarily disabled
+                      // TODO: Re-enable when network/DNS issues are resolved
+                      /*
                       const Row(
                         children: [
                           Expanded(child: Divider()),
@@ -310,6 +320,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                           );
                         },
                       ),
+                      */
                     ],
                   ),
                 ),

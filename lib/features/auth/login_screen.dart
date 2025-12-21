@@ -87,7 +87,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       height: 100,
                       padding: const EdgeInsets.all(8),
                       child: Image.asset(
-                        'assets/logos/logo-pix2land.png',
+                        'assets/logos/PIX2LAND.png',
                         fit: BoxFit.contain,
                       ),
                     ),
@@ -190,6 +190,9 @@ class _LoginScreenState extends State<LoginScreen> {
                       },
                     ),
 
+                    // Google Sign-In temporarily disabled
+                    // TODO: Re-enable when network/DNS issues are resolved
+                    /*
                     // Only show Google Sign-In on supported platforms
                     if (_isGoogleSignInSupported()) ...[
                       const SizedBox(height: 16),
@@ -250,6 +253,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         ),
                       ),
                     ],
+                    */
                   ],
                 ),
               ),

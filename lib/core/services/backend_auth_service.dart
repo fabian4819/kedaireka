@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:google_sign_in/google_sign_in.dart';
+import 'package:firebase_auth/firebase_auth.dart' as firebase_auth;
 import '../config/app_config.dart';
 import '../utils/logger.dart';
 import '../models/backend_user_model.dart';
@@ -174,18 +175,37 @@ class BackendAuthService {
 
       AppLogger.auth('Google user obtained: ${googleUser.email}');
       final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
-      if (googleAuth.idToken == null) {
-        AppLogger.error('Failed to get Google ID token', tag: 'AUTH');
-        throw Exception('Failed to get Google ID token');
+      if (googleAuth.idToken == null || googleAuth.accessToken == null) {
+        AppLogger.error('Failed to get Google tokens', tag: 'AUTH');
+        throw Exception('Failed to get Google tokens');
       }
 
-      // Send ID token to backend
-      AppLogger.api('Sending Google ID token to backend');
+      // Sign in to Firebase with Google credential to get Firebase ID token
+      AppLogger.auth('Signing in to Firebase with Google credential');
+      final credential = firebase_auth.GoogleAuthProvider.credential(
+        accessToken: googleAuth.accessToken,
+        idToken: googleAuth.idToken,
+      );
+      
+      final firebase_auth.UserCredential userCredential = 
+          await firebase_auth.FirebaseAuth.instance.signInWithCredential(credential);
+      
+      // Get Firebase ID token
+      final firebaseIdToken = await userCredential.user?.getIdToken();
+      if (firebaseIdToken == null) {
+        AppLogger.error('Failed to get Firebase ID token', tag: 'AUTH');
+        throw Exception('Failed to get Firebase ID token');
+      }
+
+      AppLogger.auth('Firebase ID token obtained, sending to backend');
+
+      // Send Firebase ID token to backend
+      AppLogger.api('Sending Firebase ID token to backend');
       final response = await http.post(
         Uri.parse(AuthEndpoints.google),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({
-          'idToken': googleAuth.idToken,
+          'idToken': firebaseIdToken,
         }),
       );
 

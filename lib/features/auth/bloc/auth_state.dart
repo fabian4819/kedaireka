@@ -58,3 +58,13 @@ class AuthEmailVerificationSent extends AuthState {
   @override
   List<Object> get props => [user];
 }
+
+// New state for successful registration - redirects to login
+class AuthRegistrationSuccess extends AuthState {
+  final String email;
+
+  const AuthRegistrationSuccess({required this.email});
+
+  @override
+  List<Object> get props => [email];
+}

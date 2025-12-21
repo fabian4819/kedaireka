@@ -84,3 +84,5 @@ nul
 
 # Icon generation script (helper only)
 generate_icon.py
+
+*.md

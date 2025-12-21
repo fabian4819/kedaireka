@@ -34,6 +34,8 @@
 	<string>This app needs location access to show your current location on the map and provide accurate AR measurements</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>This app needs access to microphone for screen sharing and voice communication</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>This app needs access to photos to save AR measurements and geospatial data</string>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
 	<key>UILaunchStoryboardName</key>
@@ -44,7 +46,12 @@
 	<array>
 		<string>armv7</string>
 		<string>metal</string>
+		<string>arkit</string>
 	</array>
+	<key>UIStatusBarHidden</key>
+	<true/>
+	<key>UIViewControllerBasedStatusBarAppearance</key>
+	<false/>
 	<key>UISupportedInterfaceOrientations</key>
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>

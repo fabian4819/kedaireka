@@ -1,0 +1,191 @@
+import Flutter
+import UIKit
+import AVFoundation
+
+@main
+@objc class AppDelegate: FlutterAppDelegate {
+
+  // MARK: - Properties
+  private var arChannel: FlutterMethodChannel?
+  private let arKitBridge = ARKitBridge()
+
+  override func application(
+    _ application: UIApplication,
+    didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
+  ) -> Bool {
+
+    // Register Flutter plugins
+    GeneratedPluginRegistrant.register(with: self)
+
+    // Initialize AR integration
+    setupARChannel()
+
+    return super.application(application, didFinishLaunchingWithOptions: launchOptions)
+  }
+
+  // MARK: - AR Setup
+  private func setupARChannel() {
+    guard let controller = window?.rootViewController as? FlutterViewController else {
+      print("❌ Could not get FlutterViewController")
+      return
+    }
+
+    let channelName = "com.kedaireka.geoclarity/ar"
+    arChannel = FlutterMethodChannel(name: channelName, binaryMessenger: controller.binaryMessenger)
+
+    // Set up callbacks for AR events
+    arKitBridge.setSessionStateCallback { [weak self] state in
+      self?.arChannel?.invokeMethod("onSessionStateChanged", arguments: state)
+    }
+    
+    arKitBridge.setMeasurementUpdateCallback { [weak self] measurement in
+      self?.arChannel?.invokeMethod("onMeasurementUpdate", arguments: measurement)
+    }
+
+    // Set up method call handler
+    arChannel?.setMethodCallHandler { [weak self] (call, result) in
+      self?.handleMethodCall(call: call, result: result)
+    }
+
+    print("✅ AR method channel set up")
+  }
+
+  // MARK: - Method Call Handler
+  private func handleMethodCall(call: FlutterMethodCall, result: @escaping FlutterResult) {
+    switch call.method {
+    case "isARSupported":
+      checkCameraPermissionAndLaunch(result: result)
+
+    case "closeUnity":
+      unityBridge.closeUnity()
+      result(nil)
+    
+    case "openSettings":
+      // Open iOS Settings app
+      if let url = URL(string: UIApplication.openSettingsURLString) {
+        if UIApplication.shared.canOpenURL(url) {
+          UIApplication.shared.open(url, options: [:]) { success in
+            result(success)
+          }
+        } else {
+          result(FlutterError(code: "UNAVAILABLE", message: "Cannot open settings", details: nil))
+        }
+      } else {
+        result(FlutterError(code: "INVALID_URL", message: "Invalid settings URL", details: nil))
+      }
+
+    case "sendToUnity":
+      guard let args = call.arguments as? [String: Any],
+            let gameObject = args["gameObject"] as? String,
+            let method = args["method"] as? String,
+            let message = args["message"] as? String else {
+        result(FlutterError(code: "INVALID_ARGS", message: "Invalid arguments for sendToUnity", details: nil))
+        return
+      }
+      unityBridge.sendToUnity(gameObject: gameObject, method: method, message: message)
+      result(nil)
+
+    case "pauseUnity":
+      unityBridge.pauseUnity()
+      result(nil)
+
+    case "resumeUnity":
+      unityBridge.resumeUnity()
+      result(nil)
+
+    case "isUnityLoaded":
+      result(unityBridge.isLoaded())
+
+    default:
+      result(FlutterMethodNotImplemented)
+    }
+  }
+
+  // MARK: - Camera Permission
+  private func checkCameraPermissionAndLaunch(result: @escaping FlutterResult) {
+    let status = AVCaptureDevice.authorizationStatus(for: .video)
+
+    switch status {
+    case .authorized:
+      launchUnityWithResult(result: result)
+
+    case .notDetermined:
+      AVCaptureDevice.requestAccess(for: .video) { [weak self] granted in
+        DispatchQueue.main.async {
+          if granted {
+            self?.launchUnityWithResult(result: result)
+          } else {
+            result(FlutterError(
+              code: "PERMISSION_DENIED",
+              message: "Camera permission denied",
+              details: nil
+            ))
+          }
+        }
+      }
+
+    case .denied, .restricted:
+      result(FlutterError(
+        code: "PERMISSION_DENIED",
+        message: "Camera permission denied or restricted. Please enable in Settings.",
+        details: nil
+      ))
+
+    @unknown default:
+      result(FlutterError(
+        code: "PERMISSION_ERROR",
+        message: "Unknown camera permission status",
+        details: nil
+      ))
+    }
+  }
+
+  private func launchUnityWithResult(result: @escaping FlutterResult) {
+    print("📱 [AppDelegate] launchUnityWithResult called")
+    
+    // Launch Unity on background thread to avoid blocking UI
+    DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+      guard let self = self else { return }
+      
+      do {
+        print("📱 [AppDelegate] Calling unityBridge.launchUnity()...")
+        try self.unityBridge.launchUnity()
+        
+        // Return result on main thread
+        DispatchQueue.main.async {
+          print("📱 [AppDelegate] Unity launch successful!")
+          result(nil)
+        }
+      } catch let error as UnityBridgeError {
+        DispatchQueue.main.async {
+          print("❌ [AppDelegate] UnityBridgeError: \(error)")
+          result(FlutterError(
+            code: "LAUNCH_ERROR",
+            message: "Unity framework is not loaded. Please ensure UnityFramework.framework is included in the project.",
+            details: error.localizedDescription
+          ))
+        }
+      } catch {
+        DispatchQueue.main.async {
+          print("❌ [AppDelegate] Unexpected error: \(error)")
+          result(FlutterError(
+            code: "LAUNCH_ERROR",
+            message: "Failed to launch Unity: \(error.localizedDescription)",
+            details: String(describing: error)
+          ))
+        }
+      }
+    }
+  }
+
+  // MARK: - App Lifecycle
+  override func applicationWillResignActive(_ application: UIApplication) {
+    unityBridge.pauseUnity()
+    super.applicationWillResignActive(application)
+  }
+
+  override func applicationDidBecomeActive(_ application: UIApplication) {
+    unityBridge.resumeUnity()
+    super.applicationDidBecomeActive(application)
+  }
+}

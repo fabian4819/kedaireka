@@ -74,39 +74,44 @@ class _BuildingsMapScreenState extends State<BuildingsMapScreen> {
         defaultValue: 'https://pix2land-backend.vercel.app',
       );
 
-      // Load both buildings data and stats
+      debugPrint('🏗️ Fetching from: $_baseUrl/buildings');
+      
+      // Load buildings data only
       final buildingsResponse = await http.get(
         Uri.parse('$_baseUrl/buildings'),
         headers: {'Content-Type': 'application/json'},
       );
 
-      final statsResponse = await http.get(
-        Uri.parse('$_baseUrl/buildings/stats'),
-        headers: {'Content-Type': 'application/json'},
-      );
+      debugPrint('🏗️ Buildings response status: ${buildingsResponse.statusCode}');
 
-      if (buildingsResponse.statusCode == 200 && statsResponse.statusCode == 200) {
+      if (buildingsResponse.statusCode == 200) {
+        debugPrint('🏗️ Parsing JSON response...');
         final rawGeoJson = jsonDecode(buildingsResponse.body);
-        final statsData = jsonDecode(statsResponse.body);
+
+        debugPrint('🏗️ Raw GeoJSON parsed, features count: ${rawGeoJson['features']?.length ?? 0}');
 
         setState(() {
           _rawBuildingsGeoJson = rawGeoJson;
           _isLoadingBuildings = false;
         });
         debugPrint('🏗️ Buildings Map Screen: Loaded raw GeoJSON with ${rawGeoJson['features'].length} buildings');
-        debugPrint('🏗️ Buildings Map Screen: Stats data: $statsData');
 
-        // Parse stats data to set proper ranges
-        await _parseAndUpdateStatsData(statsData);
-
-        // Also load processed buildings for compatibility
+        // Load processed buildings for compatibility
+        debugPrint('🏗️ Loading processed buildings via MapTilesService...');
         final buildings = await MapTilesService().getBuildings();
+        debugPrint('🏗️ Loaded ${buildings.length} processed buildings');
         _buildings = buildings;
 
+        // Calculate ranges from building data
+        await _calculateDataRanges();
+
       } else {
-        throw Exception('Failed to load buildings data: ${buildingsResponse.statusCode}, stats: ${statsResponse.statusCode}');
+        debugPrint('❌ Failed to load buildings: ${buildingsResponse.statusCode}');
+        throw Exception('Failed to load buildings data: ${buildingsResponse.statusCode}');
       }
-    } catch (e) {
+    } catch (e, stackTrace) {
+      debugPrint('❌ Error loading buildings: $e');
+      debugPrint('❌ Stack trace: $stackTrace');
       setState(() => _isLoadingBuildings = false);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -115,6 +120,9 @@ class _BuildingsMapScreenState extends State<BuildingsMapScreen> {
       }
     }
   }
+
+
+
 
   // Parse stats data and update ranges
   Future<void> _parseAndUpdateStatsData(Map<String, dynamic> statsData) async {
@@ -256,8 +264,8 @@ class _BuildingsMapScreenState extends State<BuildingsMapScreen> {
     debugPrint('  Total: ${totalMin.toStringAsFixed(3)} - ${totalMax.toStringAsFixed(3)}');
   }
 
-  // Generate gradient color based on value and mode
-  int _getGradientColorForValue(double value, String mode) {
+  // Generate solid color based on value and mode (no gradients)
+  int _getSolidColorForValue(double value, String mode) {
     final range = _dataRanges[mode];
     if (range == null || range['max'] == 0) return 0xFF3B82F6; // Default blue
 
@@ -269,43 +277,45 @@ class _BuildingsMapScreenState extends State<BuildingsMapScreen> {
 
     switch (mode) {
       case 'njop':
-        // Green -> Yellow -> Red for NJOP (low to high value)
-        if (normalizedValue < 0.5) {
-          final t = normalizedValue * 2; // 0 to 1
-          return _interpolateColor(0xFF00FF00, 0xFFFFFF, t); // Green to White
-        } else {
-          final t = (normalizedValue - 0.5) * 2; // 0 to 1
-          return _interpolateColor(0xFFFFFF, 0xFFFF0000, t); // White to Red
+        // Solid colors for NJOP: Green (low) -> Yellow (medium) -> Red (high)
+        // Use absolute thresholds, not normalized
+        if (value < 100000000) { // < 100M
+          return 0xFF00FF00; // Solid Green for low NJOP
+        } else if (value < 1000000000) { // 100M - 1B
+          return 0xFFFFFF00; // Solid Yellow for medium NJOP
+        } else { // > 1B
+          return 0xFFFF0000; // Solid Red for high NJOP
         }
 
       case 'fire':
-        // Blue -> Yellow -> Red for fire hazard
-        if (normalizedValue < 0.5) {
-          final t = normalizedValue * 2;
-          return _interpolateColor(0xFF0000FF, 0xFFFFFF, t); // Blue to White
+        // Solid colors for fire hazard: Blue (low) -> Yellow (medium) -> Red (high)
+        if (normalizedValue < 0.33) {
+          return 0xFF0000FF; // Solid Blue for low fire hazard
+        } else if (normalizedValue < 0.67) {
+          return 0xFFFFFF00; // Solid Yellow for medium fire hazard
         } else {
-          final t = (normalizedValue - 0.5) * 2;
-          return _interpolateColor(0xFFFFFF, 0xFFFF0000, t); // White to Red
+          return 0xFFFF0000; // Solid Red for high fire hazard
         }
 
       case 'flood':
-        // Light Blue -> Yellow -> Orange for flood hazard
-        if (normalizedValue < 0.5) {
-          final t = normalizedValue * 2;
-          return _interpolateColor(0xFF87CEEB, 0xFFFFFF, t); // Light Blue to White
+        // Solid colors for flood hazard: Light Blue (low) -> Yellow (medium) -> Orange (high)
+        if (normalizedValue < 0.33) {
+          return 0xFF87CEEB; // Solid Light Blue for low flood hazard
+        } else if (normalizedValue < 0.67) {
+          return 0xFFFFFF00; // Solid Yellow for medium flood hazard
         } else {
-          final t = (normalizedValue - 0.5) * 2;
-          return _interpolateColor(0xFFFFFF, 0xFFFFA500, t); // White to Orange
+          return 0xFFFFA500; // Solid Orange for high flood hazard
         }
 
       case 'total':
-        // Green -> Yellow -> Purple for total hazard
-        if (normalizedValue < 0.5) {
-          final t = normalizedValue * 2;
-          return _interpolateColor(0xFF00FF00, 0xFFFFFF, t); // Green to White
-        } else {
-          final t = (normalizedValue - 0.5) * 2;
-          return _interpolateColor(0xFFFFFF, 0xFF800080, t); // White to Purple
+        // Solid colors for total hazard: Green (low) -> Red (medium) -> Purple (high)
+        // Use absolute thresholds for consistency
+        if (value < 0.3) { // Low hazard threshold
+          return 0xFF00FF00; // Solid Green for low hazard
+        } else if (value < 0.4) { // Medium hazard threshold
+          return 0xFFFF0000; // Solid Red for medium hazard
+        } else { // High hazard
+          return 0xFF800080; // Solid Purple for high hazard
         }
 
       default:
@@ -341,7 +351,7 @@ class _BuildingsMapScreenState extends State<BuildingsMapScreen> {
       case 'njop':
         // Get NJOP from properties using correct field name
         final properties = building.properties;
-        final njopValue = properties['NJOP_TOTAL'];
+        final njopValue = properties['njop_total'];
         if (njopValue != null) {
           value = _parseNjopValueForGradient(njopValue);
         } else {
@@ -371,7 +381,7 @@ class _BuildingsMapScreenState extends State<BuildingsMapScreen> {
       return _getLowRangeColorForMode(_colorMode);
     }
 
-    return _getGradientColorForValue(value, mode);
+    return _getSolidColorForValue(value, mode);
   }
 
   // Parse NJOP value for gradient coloring (handles numeric and string formats)
@@ -529,13 +539,13 @@ class _BuildingsMapScreenState extends State<BuildingsMapScreen> {
     }
   }
 
-  // Process GeoJSON to add height and gradient color properties for 3D visualization
-  Map<String, dynamic> _processGeoJsonWithGradientColors(Map<String, dynamic> geoJson) {
+  // Process GeoJSON to add height and solid color properties for 3D visualization
+  Map<String, dynamic> _processGeoJsonWithSolidColors(Map<String, dynamic> geoJson) {
     try {
       final processedGeoJson = Map<String, dynamic>.from(geoJson);
       final features = processedGeoJson['features'] as List<dynamic>;
 
-      debugPrint('🏗️ Processing ${features.length} buildings with gradient colors for mode: $_colorMode');
+      debugPrint('🏗️ Processing ${features.length} buildings with solid colors for mode: $_colorMode');
 
       for (int i = 0; i < features.length; i++) {
         final feature = features[i] as Map<String, dynamic>;
@@ -554,7 +564,7 @@ class _BuildingsMapScreenState extends State<BuildingsMapScreen> {
         // Calculate height based on NJOP value (fixed 30m for all)
         final height = 30.0; // Fixed 30m height for all buildings
 
-        // Calculate gradient color based on current color mode
+        // Calculate solid color based on current color mode
         final color = _getColorForBuilding(building);
 
         // Add height and color to properties
@@ -567,10 +577,10 @@ class _BuildingsMapScreenState extends State<BuildingsMapScreen> {
       }
 
       processedGeoJson['features'] = features;
-      debugPrint('🏗️ Processed ${features.length} buildings with gradient colors');
+      debugPrint('🏗️ Processed ${features.length} buildings with solid colors');
       return processedGeoJson;
     } catch (e) {
-      debugPrint('❌ Error processing GeoJSON with gradient colors: $e');
+      debugPrint('❌ Error processing GeoJSON with solid colors: $e');
       return geoJson;
     }
   }
@@ -580,8 +590,8 @@ class _BuildingsMapScreenState extends State<BuildingsMapScreen> {
     debugPrint('🏗️ Ensuring properties for building ${properties['id']}: original properties = ${properties.keys.toList()}');
 
     // Use the correct field names from the API
-    if (!properties.containsKey('NJOP_TOTAL')) {
-      debugPrint('🏗️ Building ${properties['id']}: Missing NJOP_TOTAL, checking alternatives');
+    if (!properties.containsKey('njop_total')) {
+      debugPrint('🏗️ Building ${properties['id']}: Missing njop_total, checking alternatives');
     }
 
     // Check for any NJOP field with case-insensitive comparison
@@ -598,9 +608,9 @@ class _BuildingsMapScreenState extends State<BuildingsMapScreen> {
     debugPrint('🏗️ Building ${properties['id']}: Has NJOP=$hasNjop, Has Hazard=$hasHazard');
 
     // Set default values if missing (but don't override existing data)
-    if (!hasNjop && !properties.containsKey('NJOP_TOTAL')) {
-      properties['NJOP_TOTAL'] = 0;
-      debugPrint('🏗️ Set default NJOP_TOTAL=0 for building ${properties['id']}');
+    if (!hasNjop && !properties.containsKey('njop_total')) {
+      properties['njop_total'] = 0;
+      debugPrint('🏗️ Set default njop_total=0 for building ${properties['id']}');
     }
 
     if (!hasHazard && !properties.containsKey('hazard_sum')) {
@@ -630,8 +640,8 @@ class _BuildingsMapScreenState extends State<BuildingsMapScreen> {
         debugPrint('⚠️ Standard style config failed: $configError');
       }
 
-      // Process GeoJSON with gradient colors
-      final processedGeoJson = _processGeoJsonWithGradientColors(_rawBuildingsGeoJson);
+      // Process GeoJSON with solid colors
+      final processedGeoJson = _processGeoJsonWithSolidColors(_rawBuildingsGeoJson);
 
       // Add source for our custom buildings with gradient colors
       final buildingSource = mb.GeoJsonSource(
@@ -639,21 +649,21 @@ class _BuildingsMapScreenState extends State<BuildingsMapScreen> {
         data: jsonEncode(processedGeoJson),
       );
       await _mapboxMap.style.addSource(buildingSource);
-      debugPrint('✅ Buildings source with gradient colors added successfully');
+      debugPrint('✅ Buildings source with solid colors added successfully');
 
       // **MULTIPLE 3D LAYERS**: Add buildings with different colors based on value ranges
       await _addBuildingLayersByValueRanges();
 
-      // Add building outlines for better 3D definition
+      // Add building outlines for better 3D definition (transparan)
       final outlineLayer = mb.LineLayer(
         id: "buildings-3d-outline",
         sourceId: "buildings-source",
-        lineOpacity: 0.8,
+        lineOpacity: 0.0, // Diubah menjadi 0.0 agar transparan
         lineColor: Colors.black.value,
         lineWidth: 1.0,
       );
       await _mapboxMap.style.addLayer(outlineLayer);
-      debugPrint('✅ 3D outline layer added for definition');
+      debugPrint('✅ 3D outline layer added for definition (transparent)');
 
       // **INTERACTION**: Tap functionality will be handled by GestureDetector in the widget tree
       debugPrint('🎯 3D Building tap interaction set up via GestureDetector');
@@ -1386,9 +1396,9 @@ class _BuildingsMapScreenState extends State<BuildingsMapScreen> {
       debugPrint('🏗️ Processing ${_colorMode} mode - ensuring all buildings are included');
 
       // Add ALL buildings to a single layer for NJOP and Hazard modes
-      await _addSingleBuildingLayerWithGradientColors();
+      await _addSingleBuildingLayerWithSolidColors();
 
-      debugPrint('✅ Created gradient building layer for $_colorMode mode with ALL buildings');
+      debugPrint('✅ Created solid color building layer for $_colorMode mode with ALL buildings');
     } catch (e) {
       debugPrint('❌ Error creating building layers: $e');
       debugPrint('❌ Stack trace: ${StackTrace.current}');
@@ -1403,44 +1413,199 @@ class _BuildingsMapScreenState extends State<BuildingsMapScreen> {
     }
   }
 
-  // Add a single layer with gradient colors for NJOP and Hazard modes
-  Future<void> _addSingleBuildingLayerWithGradientColors() async {
+  // Add multiple layers with solid colors based on value ranges
+  Future<void> _addSingleBuildingLayerWithSolidColors() async {
     try {
-      debugPrint('🏗️ Adding single gradient layer for $_colorMode mode...');
+      debugPrint('🏗️ Adding solid color layers for $_colorMode mode...');
 
-      // Process GeoJSON with proper colors for current mode
-      final processedGeoJson = _processGeoJsonWithGradientColors(_rawBuildingsGeoJson);
-
-      // Add source for all buildings with processed colors
-      final buildingSource = mb.GeoJsonSource(
-        id: "buildings-gradient-source-$_colorMode",
-        data: jsonEncode(processedGeoJson),
-      );
-      await _mapboxMap.style.addSource(buildingSource);
-      debugPrint('✅ Added gradient source for $_colorMode mode');
-
-      // Create layers based on data ranges for better gradient effect
       if (_colorMode == 'default') {
-        // Default: single blue layer without outline
+        // Default: single blue layer
         final defaultLayer = mb.FillExtrusionLayer(
           id: "buildings-default-layer-$_colorMode",
-          sourceId: "buildings-gradient-source-$_colorMode",
+          sourceId: "buildings-source",
           fillExtrusionOpacity: 0.8,
           fillExtrusionHeight: 30.0,
-          fillExtrusionBase: 0.0, // No outline - starts from ground level
+          fillExtrusionBase: 0.0,
           fillExtrusionColor: 0xFF3B82F6,
         );
         await _mapboxMap.style.addLayer(defaultLayer);
       } else {
-        // NJOP/Hazard: Create multiple layers for gradient effect
-        await _createGradientLayersForMode();
+        // NJOP/Hazard: create separate layers for each color range
+        String mode = _colorMode == 'hazard' ? 'total' : _colorMode;
+        final range = _dataRanges[mode];
+
+        if (range != null) {
+          final min = range['min'] as double;
+          final max = range['max'] as double;
+          final rangeSize = max - min;
+
+          if (rangeSize > 0) {
+            // Calculate thresholds with better distribution
+            double lowThreshold, mediumThreshold;
+
+            if (mode == 'njop') {
+              // For NJOP, use more realistic thresholds
+              // Low: < 100M, Medium: 100M - 1B, High: > 1B
+              lowThreshold = 100000000; // 100 million
+              mediumThreshold = 1000000000; // 1 billion
+
+              // Adjust if data range is different
+              if (max < 1000000000) {
+                lowThreshold = min + (rangeSize * 0.4);
+                mediumThreshold = min + (rangeSize * 0.7);
+              }
+            } else {
+              // For hazard values, use standard distribution
+              lowThreshold = min + (rangeSize * 0.3);
+              mediumThreshold = min + (rangeSize * 0.7);
+            }
+
+            debugPrint('🏗️ Creating solid color layers for $_colorMode mode:');
+            debugPrint('  Data range: $min - $max');
+            debugPrint('  Low range: 0 - $lowThreshold');
+            debugPrint('  Medium range: $lowThreshold - $mediumThreshold');
+            debugPrint('  High range: $mediumThreshold - ∞');
+
+            // Low range layer
+            await _createSolidColorLayer(
+              'buildings-low-$_colorMode',
+              0.0,
+              lowThreshold,
+              _getSolidColorForValue(min + (rangeSize * 0.16), mode), // Low color
+              mode
+            );
+
+            // Medium range layer
+            await _createSolidColorLayer(
+              'buildings-medium-$_colorMode',
+              lowThreshold,
+              mediumThreshold,
+              _getSolidColorForValue(min + (rangeSize * 0.5), mode), // Medium color
+              mode
+            );
+
+            // High range layer
+            await _createSolidColorLayer(
+              'buildings-high-$_colorMode',
+              mediumThreshold,
+              double.infinity,
+              _getSolidColorForValue(min + (rangeSize * 0.83), mode), // High color
+              mode
+            );
+          } else {
+            // Fallback: single layer with low color
+            final fallbackLayer = mb.FillExtrusionLayer(
+              id: "buildings-fallback-$_colorMode",
+              sourceId: "buildings-source",
+              fillExtrusionOpacity: 0.8,
+              fillExtrusionHeight: 30.0,
+              fillExtrusionBase: 0.0,
+              fillExtrusionColor: _getSolidColorForValue(min, mode),
+            );
+            await _mapboxMap.style.addLayer(fallbackLayer);
+          }
+        }
       }
 
-      debugPrint('✅ Added gradient layers for $_colorMode mode');
+      debugPrint('✅ Added solid color layers for $_colorMode mode');
 
     } catch (e) {
-      debugPrint('❌ Error adding gradient layer: $e');
+      debugPrint('❌ Error adding solid color layer: $e');
       rethrow;
+    }
+  }
+
+  // Create a solid color layer for buildings within a specific value range
+  Future<void> _createSolidColorLayer(
+    String layerId,
+    double minValue,
+    double maxValue,
+    int color,
+    String mode,
+  ) async {
+    try {
+      final features = _rawBuildingsGeoJson['features'] as List<dynamic>;
+      final filteredFeatures = <dynamic>[];
+
+      for (final feature in features) {
+        final properties = feature['properties'] as Map<String, dynamic>;
+        dynamic value = 0;
+
+        // Get value based on mode
+        if (mode == 'njop') {
+          value = properties['njop_total'] ??
+                  properties['njop_total'] ??
+                  properties['njopTotal'] ??
+                  properties['njop'] ??
+                  0;
+
+          if (value is String) {
+            final cleanedValue = value.replaceAll('B', '').replaceAll(',', '').trim();
+            value = double.tryParse(cleanedValue) ?? 0.0;
+            value = value * 1000000000;
+          } else if (value != null) {
+            value = value is int ? value.toDouble() : value;
+          }
+        } else if (mode == 'total') {
+          value = properties['hazard_sum'] ??
+                  properties['hazardSum'] ??
+                  properties['total_hazard'] ??
+                  properties['totalHazard'] ??
+                  0;
+
+          if (value is String) {
+            value = double.tryParse(value.replaceAll(',', '').trim()) ?? 0.0;
+          } else if (value != null) {
+            value = value is int ? value.toDouble() : value;
+          }
+        }
+
+        if (value == null) value = 0.0;
+
+        // Include buildings in this range
+        if (value >= minValue && (maxValue == double.infinity || value <= maxValue)) {
+          filteredFeatures.add(feature);
+        } else if (value == 0 && minValue == 0.0) {
+          // Add zero-value buildings to the lowest range
+          filteredFeatures.add(feature);
+        }
+      }
+
+      if (filteredFeatures.isEmpty) {
+        debugPrint('🏗️ No buildings for layer $layerId (${minValue.toStringAsFixed(1)}-${maxValue == double.infinity ? '∞' : maxValue.toStringAsFixed(1)})');
+        return;
+      }
+
+      debugPrint('🏗️ Layer $layerId: ${filteredFeatures.length} buildings (${minValue.toStringAsFixed(1)}-${maxValue == double.infinity ? '∞' : maxValue.toStringAsFixed(1)})');
+
+      // Create filtered GeoJSON
+      final filteredGeoJson = {
+        'type': 'FeatureCollection',
+        'features': filteredFeatures,
+      };
+
+      // Add source for this layer
+      final buildingSource = mb.GeoJsonSource(
+        id: '${layerId}-source',
+        data: jsonEncode(filteredGeoJson),
+      );
+      await _mapboxMap.style.addSource(buildingSource);
+
+      // Add solid color layer
+      final extrusionLayer = mb.FillExtrusionLayer(
+        id: layerId,
+        sourceId: '${layerId}-source',
+        fillExtrusionOpacity: 0.8,
+        fillExtrusionHeight: 30.0,
+        fillExtrusionBase: 0.0,
+        fillExtrusionColor: color,
+      );
+      await _mapboxMap.style.addLayer(extrusionLayer);
+
+      debugPrint('✅ Created solid color layer $layerId with color: 0x${color.toRadixString(16)}');
+
+    } catch (e) {
+      debugPrint('❌ Error creating solid color layer $layerId: $e');
     }
   }
 
@@ -1530,7 +1695,7 @@ class _BuildingsMapScreenState extends State<BuildingsMapScreen> {
 
         if (mode == 'njop') {
           // Check all possible NJOP field names
-          value = properties['NJOP_TOTAL'] ??
+          value = properties['njop_total'] ??
                   properties['njop_total'] ??
                   properties['njopTotal'] ??
                   properties['njop'] ??
@@ -1632,7 +1797,7 @@ class _BuildingsMapScreenState extends State<BuildingsMapScreen> {
         sourceId: "buildings-source",
         fillExtrusionOpacity: 0.8,
         fillExtrusionHeight: 30.0,
-        fillExtrusionBase: 0.0, // No outline - buildings start from ground level
+        fillExtrusionBase: 0.0, // Start from ground level, no outline
         fillExtrusionColor: color,
       );
       await _mapboxMap.style.addLayer(singleLayer);
@@ -1658,7 +1823,7 @@ class _BuildingsMapScreenState extends State<BuildingsMapScreen> {
 
         if (mode == 'njop') {
           // Check all possible NJOP field names
-          final njopValue = properties['NJOP_TOTAL'] ??
+          final njopValue = properties['njop_total'] ??
                           properties['njop_total'] ??
                           properties['njopTotal'] ??
                           properties['njop'];
@@ -1860,13 +2025,13 @@ class _BuildingsMapScreenState extends State<BuildingsMapScreen> {
     List<Color> colors;
     switch (_colorMode) {
       case 'njop':
-        colors = [const Color(0xFF00FF00), const Color(0xFFFFFFFF), const Color(0xFFFF0000)];
+        colors = [const Color(0xFF00FF00), const Color(0xFFFFFF00), const Color(0xFFFF0000)];
         break;
       case 'hazard':
-        colors = [const Color(0xFF00FF00), const Color(0xFFFFFFFF), const Color(0xFF800080)];
+        colors = [const Color(0xFF00FF00), const Color(0xFFFF0000), const Color(0xFF800080)];
         break;
       default:
-        colors = [const Color(0xFF00FF00), const Color(0xFFFFFFFF), const Color(0xFFFF0000)];
+        colors = [const Color(0xFF00FF00), const Color(0xFFFFFF00), const Color(0xFFFF0000)];
     }
 
     return Row(
@@ -1894,21 +2059,21 @@ class _BuildingsMapScreenState extends State<BuildingsMapScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                highValue,
+                _colorMode == 'njop' ? '> 1B' : 'High',
                 style: const TextStyle(
                   color: Colors.white,
                   fontSize: 10,
                 ),
               ),
               Text(
-                'Mid',
+                _colorMode == 'njop' ? '100M-1B' : 'Med',
                 style: const TextStyle(
                   color: Colors.white,
                   fontSize: 10,
                 ),
               ),
               Text(
-                lowValue,
+                _colorMode == 'njop' ? '< 100M' : 'Low',
                 style: const TextStyle(
                   color: Colors.white,
                   fontSize: 10,
@@ -2067,6 +2232,12 @@ class _BuildingInfoSheet extends StatelessWidget {
                         icon: Icons.warning,
                         label: 'Total Hazard',
                         value: building.hazardSum?.toStringAsFixed(3) ?? 'N/A',
+                      ),
+                      const SizedBox(height: 8),
+                      _InfoRow(
+                        icon: Icons.map,
+                        label: 'Sub zona RDTR',
+                        value: building.kodszntext ?? 'N/A',
                       ),
                     ],
                   ),
