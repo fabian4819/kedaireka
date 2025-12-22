@@ -59,6 +59,9 @@ dependencies:
   http: ^1.2.1
   dio: ^5.4.3+1
 
+  # URL Launcher for Unity AR deep link
+  url_launcher: ^6.2.2
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

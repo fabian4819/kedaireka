@@ -51,14 +51,10 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     AppLogger.bloc('AuthInitialized triggered. User: ${user?.email}, Current state: $state');
 
     if (user != null) {
-      // Skip email verification check - allow login without verification
-      // Only emit if not already authenticated with the same user
-      if (state is! AuthAuthenticated || (state as AuthAuthenticated).user.uid != user.uid) {
-        AppLogger.bloc('Emitting AuthAuthenticated');
-        emit(AuthAuthenticated(user: user));
-      } else {
-        AppLogger.bloc('Already authenticated with same user, skipping emit');
-      }
+      // Always emit AuthAuthenticated to ensure listeners are triggered
+      // This is important for splash screen navigation
+      AppLogger.bloc('Emitting AuthAuthenticated for user: ${user.email}');
+      emit(AuthAuthenticated(user: user));
     } else {
       // Try to initialize the backend service to check for existing session
       try {
@@ -74,21 +70,9 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         AppLogger.auth('Backend service initialization failed', error: e, stackTrace: stackTrace);
       }
 
-      // Don't emit unauthenticated if we're already authenticated or in a transient state
-      if (state is AuthUnauthenticated) {
-        AppLogger.bloc('Already unauthenticated, skipping emit');
-        return;
-      }
-
-      if (state is! AuthAuthenticated &&
-          state is! AuthEmailVerificationSent &&
-          state is! AuthEmailNotVerified &&
-          state is! AuthPasswordResetSent) {
-        AppLogger.bloc('No user, emitting AuthUnauthenticated');
-        emit(AuthUnauthenticated());
-      } else {
-        AppLogger.bloc('User is null but maintaining current state: $state');
-      }
+      // Emit unauthenticated if no user found
+      AppLogger.bloc('No user found, emitting AuthUnauthenticated');
+      emit(AuthUnauthenticated());
     }
   }
 

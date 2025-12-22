@@ -64,6 +64,16 @@ void main() async {
     rethrow;
   }
 
+  // Initialize auth service to check for existing session
+  try {
+    AppLogger.info('Initializing auth service...');
+    await BackendAuthService().initialize();
+    AppLogger.info('Auth service initialized successfully');
+  } catch (e, stackTrace) {
+    AppLogger.error('Failed to initialize auth service', error: e, stackTrace: stackTrace);
+    // Don't rethrow - app can still run without existing session
+  }
+
   AppLogger.info('Starting Kedaireka app...');
   runApp(const KedairekaApp());
 }

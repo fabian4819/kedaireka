@@ -16,6 +16,8 @@ class BackendAuthService {
 
   static const String _tokenKey = 'auth_token';
   static const String _refreshTokenKey = 'refresh_token';
+  static const String _userDataKey = 'user_data';
+  static const String _authProviderKey = 'auth_provider';
 
   final GoogleSignIn _googleSignIn = GoogleSignIn(
     scopes: ['email', 'profile'],
@@ -35,22 +37,42 @@ class BackendAuthService {
     AppLogger.auth('Initializing backend auth service...');
     final prefs = await SharedPreferences.getInstance();
     final token = prefs.getString(_tokenKey);
+    final userDataJson = prefs.getString(_userDataKey);
 
-    if (token != null) {
+    if (token != null && userDataJson != null) {
       try {
-        AppLogger.auth('Found existing token, validating...');
-        final userProfile = await getUserProfile();
-        _currentUser = BackendUser.fromJson(userProfile);
-        _authProvider = userProfile['authProvider'] ?? 'email';
+        AppLogger.auth('Found existing session, restoring user data...');
+        final userData = jsonDecode(userDataJson);
+        _currentUser = BackendUser.fromJson(userData);
+        _authProvider = prefs.getString(_authProviderKey) ?? 'email';
         _authStateController.add(_currentUser);
-        AppLogger.auth('Backend auth service initialized successfully');
+        AppLogger.auth('Backend auth service initialized successfully with user: ${_currentUser?.email}');
+        
+        // Optionally validate token in background
+        _validateTokenInBackground();
       } catch (e, stackTrace) {
-        AppLogger.auth('Token validation failed, clearing tokens', error: e, stackTrace: stackTrace);
-        // Token is invalid, clear it
+        AppLogger.auth('Failed to restore session, clearing tokens', error: e, stackTrace: stackTrace);
+        // Session data is corrupted, clear it
         await clearTokens();
       }
     } else {
-      AppLogger.auth('No existing token found');
+      AppLogger.auth('No existing session found');
+    }
+  }
+
+  // Validate token in background without blocking initialization
+  Future<void> _validateTokenInBackground() async {
+    try {
+      final userProfile = await getUserProfile();
+      // Update user data if profile has changed
+      _currentUser = BackendUser.fromJson(userProfile);
+      _authProvider = userProfile['authProvider'] ?? _authProvider;
+      _authStateController.add(_currentUser);
+      AppLogger.auth('Token validated successfully');
+    } catch (e, stackTrace) {
+      AppLogger.auth('Background token validation failed, clearing session', error: e, stackTrace: stackTrace);
+      // Token is invalid, clear session
+      await clearTokens();
     }
   }
 
@@ -342,20 +364,37 @@ class BackendAuthService {
     return token;
   }
 
-  // Save tokens to secure storage
+  // Save tokens and user data to local storage
   Future<void> _saveTokens(Map<String, dynamic> tokens) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_tokenKey, tokens['accessToken']);
     await prefs.setString(_refreshTokenKey, tokens['refreshToken']);
+    
+    // Save user data if available
+    if (_currentUser != null) {
+      final userDataJson = jsonEncode(_currentUser!.toJson());
+      await prefs.setString(_userDataKey, userDataJson);
+    }
+    
+    // Save auth provider
+    if (_authProvider != null) {
+      await prefs.setString(_authProviderKey, _authProvider!);
+    }
+    
+    AppLogger.auth('Saved session data to local storage');
   }
 
-  // Clear all tokens
+  // Clear all tokens and user data
   Future<void> clearTokens() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_tokenKey);
     await prefs.remove(_refreshTokenKey);
+    await prefs.remove(_userDataKey);
+    await prefs.remove(_authProviderKey);
     _currentUser = null;
+    _authProvider = null;
     _authStateController.add(null);
+    AppLogger.auth('Cleared all session data from local storage');
   }
 
   // Get user properties
